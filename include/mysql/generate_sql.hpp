@@ -1,7 +1,7 @@
 ﻿#pragma once
-#include <aquarius/mysql/keyword.hpp>
-#include <aquarius/mysql/string_literal.hpp>
-#include <aquarius/type_traits.hpp>
+#include <mysql/keyword.hpp>
+#include <mysql/string_literal.hpp>
+#include <mysql/algorithm.hpp>
 #include <array>
 #include <functional>
 #include <typeinfo>
@@ -10,18 +10,18 @@
 
 using namespace std::string_view_literals;
 
-namespace aquarius
+namespace mysql
 {
 	template <std::string_view const& Keyword, typename _Ty>
 	void make_input_sql(std::string& sql, _Ty&& t)
 	{
-		constexpr static std::string_view table_name = name<_Ty>();
+		constexpr static std::string_view table_name = reflect::title<_Ty>();
 
 		constexpr auto temp_sql_prev = concat_v<Keyword, SPACE, INTO, SPACE, table_name, SPACE, VALUES, LEFT_BRACKET>;
 
 		sql.append(temp_sql_prev.data());
 
-		aquarius::for_each(std::forward<_Ty>(t),
+		reflect::for_each(std::forward<_Ty>(t),
 						   [&](auto&& value)
 						   {
 							   using type = std::remove_cvref_t<decltype(value)>;
@@ -60,7 +60,7 @@ namespace aquarius
 	template <typename _From, const std::string_view& Keyword, std::string_view const&... args>
 	void make_select_sql(std::string& sql)
 	{
-		constexpr static auto table_name = name<_From>();
+		constexpr static auto table_name = reflect::title<_From>();
 
 		if constexpr (sizeof...(args) != 0)
 		{
@@ -88,7 +88,7 @@ namespace aquarius
 	template <typename _Ty>
 	void make_remove_sql(std::string& sql)
 	{
-		constexpr static auto table_name = name<_Ty>();
+		constexpr static auto table_name = reflect::title<_Ty>();
 
 		constexpr auto temp_sql_prev = concat_v<REMOVE, SPACE, FROM, SPACE, table_name>;
 
@@ -98,13 +98,13 @@ namespace aquarius
 	template <typename _Ty>
 	void make_update_sql(std::string& sql, _Ty&& t)
 	{
-		constexpr static std::string_view table_name = name<_Ty>();
+		constexpr static std::string_view table_name = reflect::title<_Ty>();
 
 		constexpr auto temp_sql_prev = concat_v<UPDATE, SPACE, table_name, SPACE>;
 
 		sql.append(temp_sql_prev.data());
 
-		aquarius::for_each(std::forward<_Ty>(t),
+		reflect::for_each(std::forward<_Ty>(t),
 						   [&](auto&& value)
 						   {
 							   sql += concat_v<SET, SPACE, SPACE>;
@@ -145,4 +145,4 @@ namespace aquarius
 		}
 	}
 
-} // namespace aquarius
+} // namespace mysql

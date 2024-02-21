@@ -1,5 +1,5 @@
 #pragma once
-#include <aquarius/mysql.hpp>
+#include <mysql.hpp>
 #include <boost/test/unit_test_suite.hpp>
 #include <chrono>
 
@@ -19,18 +19,16 @@ struct products
 
 BOOST_AUTO_TEST_CASE(connect)
 {
-	aquarius::io_service_pool io_pool{ 5 };
+	mysql::io_service_pool io_pool{ 5 };
 
-	aquarius::service_pool<aquarius::mysql_connect> pool(io_pool, "172.26.4.15", boost::mysql::default_port_string,
+	mysql::service_pool<mysql::mysql_connect> pool(io_pool, "172.26.4.15", boost::mysql::default_port_string,
 														 "kcwl", "123456", "test_mysql");
 
 	std::thread t([&] { io_pool.run(); });
 
-	std::this_thread::sleep_for(3s);
+	BOOST_CHECK_EQUAL(mysql::insert(pool, products{ 1, "pro", 2, 3 }), true);
 
-	BOOST_CHECK_EQUAL(aquarius::insert(pool, products{ 1, "pro", 2, 3 }), true);
-
-	auto select_result = aquarius::select_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1);
+	auto select_result = mysql::select_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1);
 
 	if (!select_result.empty())
 	{
@@ -41,13 +39,15 @@ BOOST_AUTO_TEST_CASE(connect)
 		BOOST_CHECK_EQUAL(last_one.prod_price, 2);
 		BOOST_CHECK_EQUAL(last_one.vend_id, 3);
 
-		BOOST_CHECK_EQUAL(aquarius::remove_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1), true);
+		BOOST_CHECK_EQUAL(mysql::remove_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1), true);
 
-		std::this_thread::sleep_for(3s);
+		std::this_thread::sleep_for(1s);
 
-		aquarius::async_insert(pool, products{ 1, "pro", 2, 3 }, [](auto&& result) { BOOST_CHECK_EQUAL(result, true); });
+		mysql::async_insert(pool, products{ 1, "pro", 2, 3 }, [](auto&& result) { BOOST_CHECK_EQUAL(result, true); });
 
-		aquarius::async_select_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1,
+		std::this_thread::sleep_for(1s);
+
+		mysql::async_select_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1,
 			[](const auto& result)
 			{
 				auto& last_one = result.back();
@@ -58,11 +58,13 @@ BOOST_AUTO_TEST_CASE(connect)
 				BOOST_CHECK_EQUAL(last_one.vend_id, 3);
 			});
 
-		aquarius::async_remove_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1,
+		std::this_thread::sleep_for(1s);
+
+		mysql::async_remove_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1,
 			[](auto result) { BOOST_CHECK_EQUAL(result, true); });
 	}
 
-	std::this_thread::sleep_for(3s);
+	std::this_thread::sleep_for(1s);
 
 	pool.stop();
 
@@ -72,13 +74,13 @@ BOOST_AUTO_TEST_CASE(connect)
 
 BOOST_AUTO_TEST_CASE(sql)
 {
-	aquarius::io_service_pool io_pool{ 5 };
+	mysql::io_service_pool io_pool{ 5 };
 
-	aquarius::service_pool<aquarius::mysql_connect> pool(io_pool, "172.26.4.15", boost::mysql::default_port_string,
+	mysql::service_pool<mysql::mysql_connect> pool(io_pool, "172.26.4.15", boost::mysql::default_port_string,
 														 "kcwl", "123456", "test_mysql");
 
 	{
-		using mysql_sql = aquarius::select_chain<aquarius::mysql_connect>;
+		using mysql_sql = mysql::select_chain<mysql::mysql_connect>;
 
 		auto sql = mysql_sql(pool).select<products, AQUARIUS_SQL_BIND(prod_name)>().sql();
 
@@ -149,27 +151,27 @@ BOOST_AUTO_TEST_CASE(sql)
 	}
 
 	{
-		using mysql_sql = aquarius::chain_sql<aquarius::mysql_connect>;
+		using mysql_sql = mysql::chain_sql<mysql::mysql_connect>;
 
 		BOOST_CHECK_EQUAL(mysql_sql(pool).insert(products{ 1, "peter", 2, 3 }).sql(),
 						  "insert into products values(1,'peter',2,3)");
 	}
 
 	{
-		using mysql_sql = aquarius::chain_sql<aquarius::mysql_connect>;
+		using mysql_sql = mysql::chain_sql<mysql::mysql_connect>;
 
 		BOOST_CHECK_EQUAL(mysql_sql(pool).remove<products>().sql(), "delete from products");
 	}
 
 	{
-		using mysql_sql = aquarius::chain_sql<aquarius::mysql_connect>;
+		using mysql_sql = mysql::chain_sql<mysql::mysql_connect>;
 
 		BOOST_CHECK_EQUAL(mysql_sql(pool).update(products{ 1, "candy", 3, 5 }).sql(),
 						  "update person set age = 1 and name = 'candy'");
 	}
 
 	{
-		using mysql_sql = aquarius::chain_sql<aquarius::mysql_connect>;
+		using mysql_sql = mysql::chain_sql<mysql::mysql_connect>;
 
 		BOOST_CHECK_EQUAL(mysql_sql(pool).replace(products{ 1, "ridy", 6, 7 }).sql(),
 						  "replace into products values(1,'ridy',6,7)");

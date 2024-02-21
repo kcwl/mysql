@@ -1,10 +1,10 @@
 #pragma once
-#include <aquarius/mysql/algorithm.hpp>
-#include <aquarius/mysql/keyword.hpp>
-#include <aquarius/mysql/string_literal.hpp>
-#include <aquarius/type_traits.hpp>
+#include <mysql/algorithm.hpp>
+#include <mysql/keyword.hpp>
+#include <mysql/string_literal.hpp>
+#include <mysql/concepts.hpp>
 
-namespace aquarius
+namespace mysql
 {
 	template <string_literal sl>
 	class attributes
@@ -109,7 +109,7 @@ namespace aquarius
 		template <typename _Ty>
 		void add_value(_Ty&& t)
 		{
-			if constexpr (detail::is_string_v<_Ty>)
+			if constexpr (is_string_v<_Ty>)
 			{
 				attr_str_.append("'");
 				attr_str_.append(t);
@@ -124,6 +124,6 @@ namespace aquarius
 	private:
 		std::string attr_str_;
 	};
-} // namespace aquarius
+} // namespace mysql
 
-#define AQUARIUS_EXPR(attr) aquarius::attributes<#attr>()
+#define AQUARIUS_EXPR(attr) mysql::attributes<#attr>()

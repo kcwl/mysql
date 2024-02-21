@@ -1,14 +1,14 @@
 #pragma once
-#include <aquarius/mysql/reflect.hpp>
-#include <aquarius/mysql/attributes.hpp>
-#include <aquarius/mysql/generate_sql.hpp>
-#include <aquarius/mysql/service_pool.hpp>
-#include <aquarius/mysql/to_string.hpp>
+#include <mysql/reflect.hpp>
+#include <mysql/attributes.hpp>
+#include <mysql/generate_sql.hpp>
+#include <mysql/service_pool.hpp>
+#include <mysql/to_string.hpp>
 #include <vector>
 
 using namespace std::string_view_literals;
 
-namespace aquarius
+namespace mysql
 {
 	template <typename _Service>
 	class basic_sql
@@ -229,4 +229,4 @@ namespace aquarius
 			return *this;
 		}
 	};
-} // namespace aquarius
+} // namespace mysql

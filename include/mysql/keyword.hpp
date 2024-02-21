@@ -4,7 +4,7 @@
 
 using namespace std::string_view_literals;
 
-namespace aquarius
+namespace mysql
 {
 	inline constexpr std::string_view SELECT = "select"sv;
 
@@ -111,4 +111,4 @@ namespace aquarius
 	{
 		return "bit";
 	}
-} // namespace aquarius
+} // namespace mysql

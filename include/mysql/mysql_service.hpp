@@ -1,12 +1,11 @@
 #pragma once
-#include <aquarius/io_service_pool.hpp>
-#include <aquarius/logger.hpp>
-#include <aquarius/mysql/algorithm.hpp>
+#include <mysql/io_service_pool.hpp>
+#include <mysql/algorithm.hpp>
 #include <boost/mysql.hpp>
 #include <string>
 #include <vector>
 
-namespace aquarius
+namespace mysql
 {
 	class mysql_connect final
 	{
@@ -14,7 +13,7 @@ namespace aquarius
 		template <typename _Endpoint, typename _Param>
 		explicit mysql_connect(boost::asio::io_service& ios, _Endpoint&& host, _Param&& param)
 			: io_service_(ios)
-			, ssl_ctx_(boost::asio::ssl::basic_context::tls_client)
+			, ssl_ctx_(boost::asio::ssl::context::tls_client)
 			, mysql_ptr_(new boost::mysql::tcp_ssl_connection(io_service_, ssl_ctx_))
 			, endpoint_(host)
 			, params_(param)
@@ -22,22 +21,21 @@ namespace aquarius
 			run();
 		}
 
-		~mysql_connect() = default;
+		~mysql_connect()
+		{
+			close();
+		}
 
 	public:
 		void close()
 		{
-			mysql_ptr_->async_quit(
-				[&](const boost::mysql::error_code& ec)
-				{
-					if (ec)
-					{
-						XLOG_ERROR() << "mysql async quit error! " << ec.what();
-						return;
-					}
+			boost::mysql::error_code ec;
 
-					XLOG_INFO() << "mysql connect async quit successful!";
-				});
+			boost::mysql::diagnostics dg;
+
+			mysql_ptr_->quit(ec, dg);
+
+			mysql_ptr_->close(ec, dg);
 		}
 
 		void set_charset(const std::string& charset = "utf8mb4")
@@ -45,17 +43,9 @@ namespace aquarius
 			boost::mysql::results result;
 
 			mysql_ptr_->async_execute("SET NAMES " + charset, result,
-									  [this, charset](const boost::mysql::error_code& ec)
-									  {
-										  if (ec)
-										  {
-											  XLOG_ERROR() << "set charset failed! charset=" << charset;
-										  }
-										  else
-										  {
-											  XLOG_INFO() << "set charset " << charset << "successful";
-										  }
-									  });
+				[this, charset](auto)
+				{
+				});
 		}
 
 		bool execute(const std::string& sql, boost::mysql::error_code& ec)
@@ -64,6 +54,8 @@ namespace aquarius
 			boost::mysql::diagnostics diag{};
 
 			mysql_ptr_->execute(sql, result, ec, diag);
+
+			has_busy_ = false;
 
 			return result.has_value();
 		}
@@ -74,17 +66,18 @@ namespace aquarius
 			boost::mysql::results result{};
 
 			return mysql_ptr_->async_execute(sql, result,
-											 [&](const boost::mysql::error_code& ec)
-											 {
-												 if (ec)
-												 {
-													 XLOG_ERROR() << "failed at excute sql:" << sql;
-													 f(false);
-													 return;
-												 }
+				[&](const boost::mysql::error_code& ec)
+				{
+					if (ec)
+					{
+						f(false);
+						return;
+					}
 
-												 f(true);
-											 });
+					f(true);
+
+					has_busy_ = false;
+				});
 		}
 
 		template <typename _Ty>
@@ -100,6 +93,8 @@ namespace aquarius
 
 			t = make_result<_Ty>(result);
 
+			has_busy_ = false;
+
 			return true;
 		}
 
@@ -109,34 +104,42 @@ namespace aquarius
 			boost::mysql::results result{};
 
 			return mysql_ptr_->async_query(sql, result,
-										   [&, func = std::move(f)](const boost::mysql::error_code& ec) mutable
-										   {
-											   if (ec)
-											   {
-												   XLOG_ERROR() << "failed at excute sql:" << sql;
-												   return;
-											   }
+				[&, func = std::move(f)](const boost::mysql::error_code& ec) mutable
+				{
+					if (ec)
+					{
+						return;
+					}
 
-											   func(make_result<_Ty>(result));
-										   });
+					func(make_result<_Ty>(result));
+
+					has_busy_ = false;
+				});
+		}
+
+		void busy()
+		{
+			has_busy_ = true;
+		}
+
+		bool idle()
+		{
+			return !has_busy_;
 		}
 
 	private:
 		void run()
 		{
 			mysql_ptr_->async_connect(*endpoint_.begin(), *params_,
-									  [this](const boost::mysql::error_code& ec)
-									  {
-										  if (ec)
-										  {
-											  XLOG_ERROR() << "mysql connect error! " << ec.what();
-											  return;
-										  }
+				[this](const boost::mysql::error_code& ec)
+				{
+					if (ec)
+					{
+						return;
+					}
 
-										  XLOG_INFO() << "msyql async connect success!";
-
-										  // set_charset();
-									  });
+					// set_charset();
+				});
 		}
 
 		template <typename _Ty>
@@ -158,12 +161,14 @@ namespace aquarius
 	private:
 		boost::asio::io_service& io_service_;
 
-		boost::asio::ssl::basic_context ssl_ctx_;
+		boost::asio::ssl::context ssl_ctx_;
 
 		std::unique_ptr<boost::mysql::tcp_ssl_connection> mysql_ptr_;
 
 		boost::asio::ip::tcp::resolver::results_type endpoint_;
 
 		std::shared_ptr<boost::mysql::handshake_params> params_;
+
+		bool has_busy_;
 	};
-} // namespace aquarius
+} // namespace mysql

@@ -1,14 +1,14 @@
 #pragma once
-#include <aquarius/mysql/mysql_service.hpp>
-#include <aquarius/mysql/service_pool.hpp>
-#include <aquarius/mysql/sql.hpp>
+#include <mysql/mysql_service.hpp>
+#include <mysql/service_pool.hpp>
+#include <mysql/sql.hpp>
 
 namespace
 {
-	using mysql_pool = aquarius::service_pool<aquarius::mysql_connect>;
+	using mysql_pool = mysql::service_pool<mysql::mysql_connect>;
 }
 
-namespace aquarius
+namespace mysql
 {
 	template <typename _Ty, string_literal... args>
 	std::vector<_Ty> select(mysql_pool& pool)
@@ -129,4 +129,4 @@ namespace aquarius
 			.where(std::forward<_Attr>(attr))
 			.async_execute(std::forward<_Func>(f));
 	}
-} // namespace aquarius
+} // namespace mysql

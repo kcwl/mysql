@@ -5,97 +5,12 @@
 #include <string>
 #include <string_view>
 #include <boost/mysql.hpp>
-#include <aquarius/mysql/reflect.hpp>
+#include <mysql/reflect.hpp>
 
 #pragma warning(disable : 4996)
 
-namespace aquarius
+namespace mysql
 {
-	template <typename Tuple, typename Func, std::size_t... I>
-	constexpr auto for_each(Tuple&& tuple, Func&& f, std::index_sequence<I...>)
-	{
-		return (std::forward<Func>(f)(aquarius::get<I>(std::forward<Tuple>(tuple))), ...);
-	}
-
-	template <typename T, typename Func>
-	constexpr auto for_each(T&& tp, Func&& f)
-	{
-		return for_each(std::forward<T>(tp), std::forward<Func>(f),
-						std::make_index_sequence<aquarius::tuple_size_v<T>>{});
-	}
-
-	template <typename Tuple, typename Func, std::size_t... I>
-	constexpr auto for_each_elem(Tuple&& tuple, Func&& f, std::index_sequence<I...>)
-	{
-		return (std::forward<Func>(f)(name<Tuple, I>(), aquarius::get<I>(std::forward<Tuple>(tuple)), std::move(I)),
-				...);
-	}
-
-	template <typename T, typename Func>
-	constexpr auto for_each_elem(T&& tp, Func&& f)
-	{
-		return for_each_elem(std::forward<T>(tp), std::forward<Func>(f),
-							 std::make_index_sequence<aquarius::tuple_size_v<T>>{});
-	}
-
-	//template <typename T>
-	//std::string to_string(T&& val)
-	//{
-	//	std::stringstream ss;
-	//	if constexpr (detail::is_string_v<std::remove_cvref_t<T>>)
-	//	{
-	//		ss << "'" << val << "'";
-	//	}
-	//	else if constexpr (detail::is_container_v<std::remove_cvref_t<T>>)
-	//	{
-	//		ss << "{";
-	//		std::for_each(val.begin(), val.end(),
-	//					  [&](auto iter)
-	//					  {
-	//						  if constexpr (detail::is_byte_v<decltype(iter)>)
-	//							  ss << static_cast<char>(iter) << ",";
-	//						  else
-	//						  {
-	//							  ss << "{";
-
-	//							  for_each(val, [&ss](const std::string& name, auto value) { ss << value << ","; });
-
-	//							  auto result = ss.str();
-	//							  result.erase(result.size() - 1);
-	//							  result.append("},");
-	//						  }
-	//					  });
-
-	//		auto result = ss.str();
-	//		result.erase(result.size() - 1);
-	//		result.append("}");
-
-	//		return result;
-	//	}
-	//	else if constexpr (detail::is_byte_v<std::remove_cvref_t<T>>)
-	//	{
-	//		ss << static_cast<char>(std::forward<T>(val));
-	//	}
-	//	else if constexpr (std::is_trivial_v<std::remove_reference_t<T>>)
-	//	{
-	//		ss << val;
-	//	}
-	//	else if constexpr (detail::is_variant_v<std::remove_cvref_t<T>>)
-	//	{
-	//		// constexpr std::size_t index = std::forward<T>(val).index();
-	//		// ss << detail::to_string(std::get<index>(std::forward<T>(val)));
-	//		/*auto result = */ // for_each_variant(std::forward<T>(val),ss);
-
-	//		/*ss << detail::to_string(std::get<decltype(result)>(std::forward<T>(val)));*/
-	//	}
-	//	else
-	//	{
-	//		ss << val;
-	//	}
-
-	//	return ss.str();
-	//}
-
 	template<typename _Ty>
 	auto cast(const boost::mysql::field_view& field)
 	{
@@ -114,13 +29,13 @@ namespace aquarius
 	template <typename T, std::size_t... I>
 	auto to_struct_impl(const boost::mysql::row& row, std::index_sequence<I...>)
 	{
-		return T{ cast<decltype(get<I>(std::declval<T>()))>(row[I])... };
+		return T{ cast<decltype(reflect::get<I>(std::declval<T>()))>(row[I])...};
 	}
 
 	template <typename T>
 	auto to_struct(const boost::mysql::row& row)
 	{
-		return to_struct_impl<T>(row, std::make_index_sequence<tuple_size_v<T>>{});
+		return to_struct_impl<T>(row, std::make_index_sequence<reflect::tuple_size_v<T>>{});
 	}
 
 	template <const std::string_view&... args>
@@ -208,4 +123,4 @@ namespace aquarius
 
 		return std::string(buff.data(), next);
 	}
-} // namespace aquarius
+} // namespace mysql

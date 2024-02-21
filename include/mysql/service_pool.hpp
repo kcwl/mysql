@@ -1,18 +1,22 @@
 #pragma once
 #include <algorithm>
-#include <aquarius/io_service_pool.hpp>
+#include <mysql/io_service_pool.hpp>
 #include <boost/mysql.hpp>
 #include <deque>
 #include <format>
 #include <memory>
 #include <mutex>
 
-namespace aquarius
+namespace mysql
 {
 	template <typename _Service>
 	class service_pool
 	{
-		using service_ptr = std::unique_ptr<_Service>;
+		using service_t = _Service;
+
+		using unique_service_ptr = std::unique_ptr<service_t>;
+
+		using service_ptr = service_t*;
 
 		static constexpr std::size_t connect_number = 2 * 3;
 
@@ -30,32 +34,19 @@ namespace aquarius
 		{
 			std::lock_guard lk(free_mutex_);
 
-			while (!free_queue_.empty())
-			{
-				auto& front = free_queue_.front();
-
-				if (front)
-					front->close();
-
-				free_queue_.pop_front();
-			}
+			free_queue_.clear();
 		}
 
 		bool execute(const std::string& sql)
 		{
 			auto conn_ptr = get_service();
 
-			if (conn_ptr == nullptr)
-				conn_ptr = std::make_unique<_Service>(pool_.get_io_service(), endpoint_, params_);
+			if (!check_service(conn_ptr))
+				return false;
 
 			boost::mysql::error_code ec;
 
-			if (!conn_ptr->execute(sql, ec))
-			{
-				XLOG_ERROR() << "sql: " << sql << " execute failed! " << ec.what();
-			}
-
-			this->recycle_service(std::move(conn_ptr));
+			conn_ptr->execute(sql, ec);
 
 			return true;
 		}
@@ -65,16 +56,14 @@ namespace aquarius
 		{
 			auto conn_ptr = get_service();
 
-			if (conn_ptr == nullptr)
-				conn_ptr = std::make_unique<_Service>(pool_.get_io_service(), endpoint_, params_);
+			if (!check_service(conn_ptr))
+				return;
 
 			return conn_ptr->async_excute(sql,
-								   [&, ptr = std::move(conn_ptr), func = std::move(f)](bool value) mutable
-								   {
-									   func(std::move(value));
-
-									   this->recycle_service(std::move(ptr));
-								   });
+				[&, ptr = std::move(conn_ptr), func = std::move(f)](bool value) mutable
+				{
+					func(std::move(value));
+				});
 		}
 
 		template <typename _Ty>
@@ -82,18 +71,13 @@ namespace aquarius
 		{
 			auto conn_ptr = get_service();
 
-			if (conn_ptr == nullptr)
-				conn_ptr = std::make_unique<_Service>(pool_.get_io_service(), endpoint_, params_);
+			if (!check_service(conn_ptr))
+				return{};
 
 			boost::mysql::error_code ec;
 
 			std::vector<_Ty> result{};
-			if (!conn_ptr->query<_Ty>(sql, result, ec))
-			{
-				XLOG_ERROR() << "sql: " << sql << " query failed! " << ec.what();
-			}
-
-			this->recycle_service(std::move(conn_ptr));
+			conn_ptr->query<_Ty>(sql, result, ec);
 
 			return result;
 		}
@@ -109,16 +93,14 @@ namespace aquarius
 		{
 			auto conn_ptr = get_service();
 
-			if (conn_ptr == nullptr)
-				conn_ptr = std::make_unique<_Service>(pool_.get_io_service(), endpoint_, params_);
+			if (!check_service(conn_ptr))
+				return;
 
 			return conn_ptr->template async_query<_Ty>(sql,
-												  [&, ptr = std::move(conn_ptr), func = std::move(f)](const std::vector<_Ty>& value) mutable
-												  {
-													  func(value);
-
-													  this->recycle_service(std::move(ptr));
-												  });
+				[&, ptr = std::move(conn_ptr), func = std::move(f)](const std::vector<_Ty>& value) mutable
+				{
+					func(value);
+				});
 		}
 
 	private:
@@ -140,20 +122,15 @@ namespace aquarius
 			if (free_queue_.empty())
 				return nullptr;
 
-			auto& front = free_queue_.front();
+			for (auto& service : free_queue_)
+			{
+				if (!service->idle())
+					continue;
 
-			auto conn_ptr = std::move(front);
+				return service.get();
+			}
 
-			free_queue_.pop_front();
-
-			return conn_ptr;
-		}
-
-		void recycle_service(service_ptr&& conn_ptr)
-		{
-			std::lock_guard lk(free_mutex_);
-
-			free_queue_.push_back(std::move(conn_ptr));
+			return nullptr;
 		}
 
 		template <typename _Host, typename _Passwd, typename... _Args>
@@ -166,10 +143,23 @@ namespace aquarius
 			params_.reset(new boost::mysql::handshake_params(std::forward<_Args>(args)...));
 		}
 
+		bool check_service(service_ptr service)
+		{
+			if (service == nullptr)
+				service = new _Service(pool_.get_io_service(), endpoint_, params_);
+
+			if (!service->idle())
+				return false;
+
+			service->busy();
+
+			return true;
+		}
+
 	private:
 		io_service_pool& pool_;
 
-		std::deque<service_ptr> free_queue_;
+		std::vector<unique_service_ptr> free_queue_;
 
 		std::mutex free_mutex_;
 
@@ -177,4 +167,4 @@ namespace aquarius
 
 		std::shared_ptr<boost::mysql::handshake_params> params_;
 	};
-} // namespace aquarius
+} // namespace mysql

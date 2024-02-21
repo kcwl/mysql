@@ -1,7 +1,7 @@
 #pragma once
 #include <string_view>
 
-namespace aquarius
+namespace mysql
 {
 	template <std::size_t N>
 	struct string_literal
@@ -23,7 +23,7 @@ namespace aquarius
 	{
 		static constexpr std::string_view value = param.value;
 	};
-} // namespace aquarius
+} // namespace mysql
 
 #define AQUARIUS_EXPAND(...) __VA_ARGS__
 
