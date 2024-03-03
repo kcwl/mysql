@@ -1,6 +1,6 @@
 #pragma once
-#include <mysql/io_service_pool.hpp>
-#include <mysql/algorithm.hpp>
+#include "mysql/io_service_pool.hpp"
+#include "mysql/algorithm.hpp"
 #include <boost/mysql.hpp>
 #include <string>
 #include <vector>
@@ -61,7 +61,7 @@ namespace mysql
 		}
 
 		template <typename _Func>
-		auto async_excute(std::string_view sql, _Func&& f)
+		auto async_execute(std::string_view sql, _Func&& f)
 		{
 			boost::mysql::results result{};
 

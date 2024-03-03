@@ -1,8 +1,8 @@
 #pragma once
-#include <mysql/algorithm.hpp>
-#include <mysql/keyword.hpp>
-#include <mysql/string_literal.hpp>
-#include <mysql/concepts.hpp>
+#include "mysql/algorithm.hpp"
+#include "mysql/keyword.hpp"
+#include "mysql/string_literal.hpp"
+#include "mysql/concepts.hpp"
 
 namespace mysql
 {

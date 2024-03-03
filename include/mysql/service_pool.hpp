@@ -1,11 +1,12 @@
 #pragma once
 #include <algorithm>
-#include <mysql/io_service_pool.hpp>
+#include "mysql/io_service_pool.hpp"
 #include <boost/mysql.hpp>
 #include <deque>
 #include <format>
 #include <memory>
 #include <mutex>
+#include "transaction.hpp"
 
 namespace mysql
 {
@@ -18,6 +19,8 @@ namespace mysql
 
 		using service_ptr = service_t*;
 
+		using transaction_t = transaction<_Service>;
+
 		static constexpr std::size_t connect_number = 2 * 3;
 
 	public:
@@ -29,13 +32,6 @@ namespace mysql
 		}
 
 		~service_pool() = default;
-
-		void stop()
-		{
-			std::lock_guard lk(free_mutex_);
-
-			free_queue_.clear();
-		}
 
 		bool execute(const std::string& sql)
 		{
@@ -59,7 +55,7 @@ namespace mysql
 			if (!check_service(conn_ptr))
 				return;
 
-			return conn_ptr->async_excute(sql,
+			return conn_ptr->async_execute(sql,
 				[&, ptr = std::move(conn_ptr), func = std::move(f)](bool value) mutable
 				{
 					func(std::move(value));
@@ -101,6 +97,18 @@ namespace mysql
 				{
 					func(value);
 				});
+		}
+
+		template<typename _Func>
+		bool transactions(_Func&& f, transaction_t::isolation_level level = transaction_t::isolation_level::no_repeated_read,
+			transaction_t::isolation_scope scope = transaction_t::isolation_scope::current, bool consistant = true)
+		{
+			auto conn_ptr = get_service();
+
+			if (!check_service(conn_ptr))
+				return false;
+
+			return transaction(conn_ptr, level, scope, consistant).execute(std::forward<_Func>(f));
 		}
 
 	private:

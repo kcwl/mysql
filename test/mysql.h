@@ -66,7 +66,13 @@ BOOST_AUTO_TEST_CASE(connect)
 
 	std::this_thread::sleep_for(1s);
 
-	pool.stop();
+	using trans_t = transaction<mysql::mysql_connect>;
+
+	auto res = pool.transactions([]() {return true; });
+
+	BOOST_CHECK(res == true);
+
+	std::this_thread::sleep_for(1s);
 
 	io_pool.stop();
 	t.join();
@@ -176,6 +182,15 @@ BOOST_AUTO_TEST_CASE(sql)
 		BOOST_CHECK_EQUAL(mysql_sql(pool).replace(products{ 1, "ridy", 6, 7 }).sql(),
 						  "replace into products values(1,'ridy',6,7)");
 	}
+}
+
+BOOST_AUTO_TEST_CASE(transactions)
+{
+	using trans_t = transaction<mysql::mysql_connect>;
+
+	auto result = trans_t(nullptr, trans_t::isolation_level::no_repeated_read,trans_t::isolation_scope::current).execute([]() {return true; });
+
+	BOOST_CHECK(result == false);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -5,31 +5,46 @@
 #include <string>
 #include <string_view>
 #include <boost/mysql.hpp>
-#include <mysql/reflect.hpp>
+#include "mysql/reflect.hpp"
 
 #pragma warning(disable : 4996)
 
 namespace mysql
 {
 	template<typename _Ty>
-	auto cast(const boost::mysql::field_view& field)
+	struct cast
 	{
-		std::stringstream ss{};
-		ss << field;
+		static auto invoke(const boost::mysql::field_view& field)
+		{
+			std::stringstream ss{};
+			ss << field;
 
-		using type = std::remove_cvref_t<_Ty>;
+			using type = std::remove_cvref_t<_Ty>;
 
-		type result{};
+			type result{};
 
-		ss >> result;
+			ss >> result;
 
-		return result;
-	}
+			return result;
+		}
+	};
+	
+
+	template<typename _Ty>
+	struct cast<std::vector<_Ty>>
+	{
+		static auto invoke(const boost::mysql::field_view& field)
+		{
+			std::vector<_Ty> result{};
+
+			return result;
+		}
+	};
 
 	template <typename T, std::size_t... I>
 	auto to_struct_impl(const boost::mysql::row& row, std::index_sequence<I...>)
 	{
-		return T{ cast<decltype(reflect::get<I>(std::declval<T>()))>(row[I])...};
+		return T{ cast<decltype(reflect::get<I>(std::declval<T>()))>::invoke(row[I])...};
 	}
 
 	template <typename T>

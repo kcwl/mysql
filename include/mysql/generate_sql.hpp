@@ -1,7 +1,7 @@
 ﻿#pragma once
-#include <mysql/keyword.hpp>
-#include <mysql/string_literal.hpp>
-#include <mysql/algorithm.hpp>
+#include "mysql/keyword.hpp"
+#include "mysql/string_literal.hpp"
+#include "mysql/algorithm.hpp"
 #include <array>
 #include <functional>
 #include <typeinfo>

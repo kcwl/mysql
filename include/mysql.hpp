@@ -1,7 +1,7 @@
 #pragma once
-#include <mysql/mysql_service.hpp>
-#include <mysql/service_pool.hpp>
-#include <mysql/sql.hpp>
+#include "mysql/mysql_service.hpp"
+#include "mysql/service_pool.hpp"
+#include "mysql/sql.hpp"
 
 namespace
 {

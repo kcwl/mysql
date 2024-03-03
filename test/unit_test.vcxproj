@@ -164,7 +164,7 @@
     <ClInclude Include="..\include\mysql\reflect.hpp" />
     <ClInclude Include="..\include\mysql\service_pool.hpp" />
     <ClInclude Include="..\include\mysql\sql.hpp" />
-    <ClInclude Include="..\include\mysql\sql_transaction.hpp" />
+    <ClInclude Include="..\include\mysql\transaction.hpp" />
     <ClInclude Include="..\include\mysql\string_literal.hpp" />
     <ClInclude Include="..\include\mysql\to_string.hpp" />
     <ClInclude Include="mysql.h" />
