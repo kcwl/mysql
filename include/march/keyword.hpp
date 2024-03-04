@@ -4,7 +4,7 @@
 
 using namespace std::string_view_literals;
 
-namespace mysql
+namespace march
 {
 	inline constexpr std::string_view SELECT = "select"sv;
 
@@ -64,7 +64,7 @@ namespace mysql
 
 	inline constexpr std::string_view OFFSET = "offset"sv;
 
-	inline constexpr std::string_view ORDER= "order"sv;
+	inline constexpr std::string_view ORDER = "order"sv;
 
 	inline constexpr std::string_view BY = "by"sv;
 
@@ -111,4 +111,4 @@ namespace mysql
 	{
 		return "bit";
 	}
-} // namespace mysql
+} // namespace march

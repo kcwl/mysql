@@ -3,8 +3,20 @@
 #include <vector>
 #include <memory>
 
-namespace mysql
+namespace march
 {
+	namespace detail
+	{
+		template<typename _Func>
+		struct init_execute
+		{
+			void operator()(_Func f)
+			{
+				f();
+			}
+		};
+	}
+
 	template<typename _Service>
 	class transaction
 	{
@@ -27,7 +39,7 @@ namespace mysql
 		};
 
 		friend class transaction::transaction_guard;
-		
+
 	public:
 		enum class isolation_level
 		{
@@ -83,9 +95,9 @@ namespace mysql
 
 			ss << ";";
 
-			boost::mysql::error_code ec;
-			
-			if(conn_service_ptr_)
+			error_code ec;
+
+			if (conn_service_ptr_)
 				conn_service_ptr_->execute(ss.str(), ec);
 		}
 
@@ -98,10 +110,16 @@ namespace mysql
 			return finish_ = f();
 		}
 
+		template<typename _Func, typename _Token>
+		void async_execute([[maybe_unused]]_Func&& f, [[maybe_unused]]_Token&& token)
+		{
+			//return boost::asio::async_initiate<_Token, void(error_code)>(detail::init_execute<_Func>(std::move(f)), std::forward<_Token>(token));
+		}
+
 	private:
 		void commit()
 		{
-			boost::mysql::error_code ec;
+			error_code ec;
 
 			if (!conn_service_ptr_)
 				return;
@@ -111,7 +129,7 @@ namespace mysql
 
 		void roll_back()
 		{
-			boost::mysql::error_code ec;
+			error_code ec;
 
 			if (!conn_service_ptr_)
 				return;

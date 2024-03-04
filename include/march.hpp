@@ -1,19 +1,21 @@
 #pragma once
-#include "mysql/mysql_service.hpp"
-#include "mysql/service_pool.hpp"
-#include "mysql/sql.hpp"
+#include "march/db_service.hpp"
+#include "march/service_pool.hpp"
+#include "march/sql.hpp"
 
 namespace
 {
-	using mysql_pool = mysql::service_pool<mysql::mysql_connect>;
+	using mysql_pool = march::db_service_pool<march::db_service>;
 }
 
-namespace mysql
+namespace march
 {
-	template <typename _Ty, string_literal... args>
+	template <typename _Ty, string_literal... Args>
 	std::vector<_Ty> select(mysql_pool& pool)
 	{
-		return select_chain(pool).select<_Ty, args...>().query();
+		error_code ec;
+
+		return select_chain(pool).select<_Ty, Args...>().query(ec);
 	}
 
 	template <typename _Ty, typename _Func>
@@ -23,13 +25,15 @@ namespace mysql
 	}
 
 	template <typename _Ty, typename _Attr>
-	std::vector<_Ty> select_if(mysql_pool& pool, _Attr&& attr)
+	auto select_if(mysql_pool& pool, _Attr&& attr)
 	{
-		return select_chain(pool).select<_Ty>().where(std::forward<_Attr>(attr)).query<_Ty>();
+		error_code ec;
+
+		return select_chain(pool).select<_Ty>().where(std::forward<_Attr>(attr)).query(ec);
 	}
 
 	template <typename _Ty, typename _Attr, typename _Func>
-	auto async_select_if(mysql_pool& pool, _Attr&& attr, _Func&& f)
+	void async_select_if(mysql_pool& pool, _Attr&& attr, _Func&& f)
 	{
 		return select_chain(pool)
 			.select<_Ty>()
@@ -38,13 +42,14 @@ namespace mysql
 	}
 
 	template <typename _Ty>
-	bool insert(mysql_pool& pool, _Ty&& t)
+	auto insert(mysql_pool& pool, _Ty&& t)
 	{
-		return chain_sql(pool).insert(std::forward<_Ty>(t)).execute();
+		error_code ec;
+		return chain_sql(pool).insert(std::forward<_Ty>(t)).execute(ec);
 	}
 
 	template <typename _Ty, typename _Func>
-	auto async_insert(mysql_pool& pool, _Ty&& t, _Func&& f)
+	void async_insert(mysql_pool& pool, _Ty&& t, _Func&& f)
 	{
 		return chain_sql(pool).insert(std::forward<_Ty>(t)).async_execute(std::forward<_Func>(f));
 	}
@@ -52,19 +57,22 @@ namespace mysql
 	template <typename _Ty>
 	bool remove(mysql_pool& pool)
 	{
-		return chain_sql(pool).remove<_Ty>().execute();
+		error_code ec;
+		return chain_sql(pool).remove<_Ty>().execute(ec);
 	}
 
 	template <typename _Ty, typename _Func>
-	auto async_remove(mysql_pool& pool, _Func&& f)
+	void async_remove(mysql_pool& pool, _Func&& f)
 	{
 		return chain_sql(pool).remove<_Ty>().async_execute(std::forward<_Func>(f));
 	}
 
 	template <typename _Ty, typename _Attr>
-	bool remove_if(mysql_pool& pool, _Attr&& attr)
+	auto remove_if(mysql_pool& pool, _Attr&& attr)
 	{
-		return chain_sql(pool).remove<_Ty>().where(std::forward<_Attr>(attr)).execute();
+		error_code ec;
+
+		return chain_sql(pool).remove<_Ty>().where(std::forward<_Attr>(attr)).execute(ec);
 	}
 
 	template <typename _Ty, typename _Attr, typename _Func>
@@ -77,9 +85,10 @@ namespace mysql
 	}
 
 	template <typename _Ty>
-	bool update(mysql_pool& pool, _Ty&& t)
+	auto update(mysql_pool& pool, _Ty&& t)
 	{
-		return chain_sql(pool).update(std::forward<_Ty>(t)).execute();
+		error_code ec;
+		return chain_sql(pool).update(std::forward<_Ty>(t)).execute(ec);
 	}
 
 	template <typename _Ty, typename _Func>
@@ -89,13 +98,15 @@ namespace mysql
 	}
 
 	template <typename _Ty, typename _Attr>
-	bool update_if(mysql_pool& pool, _Ty&& t, _Attr&& attr)
+	auto update_if(mysql_pool& pool, _Ty&& t, _Attr&& attr)
 	{
-		return chain_sql(pool).update(std::forward<_Ty>(t)).where(std::forward<_Attr>(attr)).execute();
+		error_code ec;
+
+		return chain_sql(pool).update(std::forward<_Ty>(t)).where(std::forward<_Attr>(attr)).execute(ec);
 	}
 
 	template <typename _Ty, typename _Attr, typename _Func>
-	auto async_update_if(mysql_pool& pool, _Ty&& t, _Attr&& attr, _Func&& f)
+	void async_update_if(mysql_pool& pool, _Ty&& t, _Attr&& attr, _Func&& f)
 	{
 		return chain_sql(pool)
 			.update(std::forward<_Ty>(t))
@@ -104,29 +115,33 @@ namespace mysql
 	}
 
 	template <typename _Ty>
-	bool replace(mysql_pool& pool, _Ty&& t)
+	auto replace(mysql_pool& pool, _Ty&& t)
 	{
-		return chain_sql(pool).update(std::forward<_Ty>(t)).execute();
+		error_code ec;
+
+		return chain_sql(pool).update(std::forward<_Ty>(t)).execute(ec);
 	}
 
 	template <typename _Ty, typename _Func>
-	auto async_replace(mysql_pool& pool, _Ty&& t, _Func&& f)
+	void async_replace(mysql_pool& pool, _Ty&& t, _Func&& f)
 	{
 		return chain_sql(pool).update(std::forward<_Ty>(t)).async_execute(std::forward<_Func>(f));
 	}
 
 	template <typename _Ty, typename _Attr>
-	bool replace_if(mysql_pool& pool, _Ty&& t, _Attr&& attr)
+	auto replace_if(mysql_pool& pool, _Ty&& t, _Attr&& attr)
 	{
-		return chain_sql(pool).update(std::forward<_Ty>(t)).where(std::forward<_Attr>(attr)).execute();
+		error_code ec;
+
+		return chain_sql(pool).update(std::forward<_Ty>(t)).where(std::forward<_Attr>(attr)).execute(ec);
 	}
 
 	template <typename _Ty, typename _Attr, typename _Func>
-	auto async_replace_if(mysql_pool& pool, _Ty&& t, _Attr&& attr, _Func&& f)
+	void async_replace_if(mysql_pool& pool, _Ty&& t, _Attr&& attr, _Func&& f)
 	{
 		return chain_sql(pool)
 			.update(std::forward<_Ty>(t))
 			.where(std::forward<_Attr>(attr))
 			.async_execute(std::forward<_Func>(f));
 	}
-} // namespace mysql
+} // namespace march

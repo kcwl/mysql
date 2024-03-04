@@ -2,7 +2,7 @@
 #include <concepts>
 #include <string>
 
-namespace mysql
+namespace march
 {
 	template <typename _Ty>
 	struct is_string : std::false_type

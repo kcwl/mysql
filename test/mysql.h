@@ -1,13 +1,13 @@
 #pragma once
-#include <mysql.hpp>
 #include <boost/test/unit_test_suite.hpp>
 #include <chrono>
+#include <march.hpp>
 
 using namespace std::chrono_literals;
 
 using namespace std::string_view_literals;
 
-BOOST_AUTO_TEST_SUITE(mysql)
+BOOST_AUTO_TEST_SUITE(march)
 
 struct products
 {
@@ -17,18 +17,20 @@ struct products
 	int vend_id;
 };
 
-BOOST_AUTO_TEST_CASE(connect)
+BOOST_AUTO_TEST_CASE(sync)
 {
-	mysql::io_service_pool io_pool{ 5 };
+	march::io_service_pool io_pool{ 5 };
 
-	mysql::service_pool<mysql::mysql_connect> pool(io_pool, "172.26.4.15", boost::mysql::default_port_string,
-														 "kcwl", "123456", "test_mysql");
+	march::db_service_pool<march::db_service> pool(io_pool, "172.26.4.15", march::default_port_string, "kcwl", "123456",
+												   "test_mysql");
 
 	std::thread t([&] { io_pool.run(); });
 
-	BOOST_CHECK_EQUAL(mysql::insert(pool, products{ 1, "pro", 2, 3 }), true);
+	auto result = march::insert(pool, products{ 1, "pro", 2, 3 });
 
-	auto select_result = mysql::select_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1);
+	BOOST_CHECK_EQUAL(result.affected_rows(), 1);
+
+	auto select_result = march::select_if<products>(pool, MAR_EXPR(prod_id) == 1).to_vector<products>();
 
 	if (!select_result.empty())
 	{
@@ -38,37 +40,34 @@ BOOST_AUTO_TEST_CASE(connect)
 		BOOST_CHECK_EQUAL(last_one.prod_name, "pro");
 		BOOST_CHECK_EQUAL(last_one.prod_price, 2);
 		BOOST_CHECK_EQUAL(last_one.vend_id, 3);
-
-		BOOST_CHECK_EQUAL(mysql::remove_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1), true);
-
-		std::this_thread::sleep_for(1s);
-
-		mysql::async_insert(pool, products{ 1, "pro", 2, 3 }, [](auto&& result) { BOOST_CHECK_EQUAL(result, true); });
-
-		std::this_thread::sleep_for(1s);
-
-		mysql::async_select_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1,
-			[](const auto& result)
-			{
-				auto& last_one = result.back();
-
-				BOOST_CHECK_EQUAL(last_one.prod_id, 1);
-				BOOST_CHECK_EQUAL(last_one.prod_name, "pro");
-				BOOST_CHECK_EQUAL(last_one.prod_price, 2);
-				BOOST_CHECK_EQUAL(last_one.vend_id, 3);
-			});
-
-		std::this_thread::sleep_for(1s);
-
-		mysql::async_remove_if<products>(pool, AQUARIUS_EXPR(prod_id) == 1,
-			[](auto result) { BOOST_CHECK_EQUAL(result, true); });
 	}
 
-	std::this_thread::sleep_for(1s);
+	auto remove_result = march::remove_if<products>(pool, MAR_EXPR(prod_id) == 1);
 
-	using trans_t = transaction<mysql::mysql_connect>;
+	BOOST_CHECK_EQUAL(remove_result.affected_rows(), 1);
 
-	auto res = pool.transactions([]() {return true; });
+	using trans_t = transaction<march::db_service>;
+
+	auto res = pool.transactions(
+		[&]
+		{
+			auto result1 = march::insert(pool, products{ 2, "pro", 2, 3 });
+
+			if (!result1.affected_rows())
+				return false;
+
+			auto result2 = march::insert(pool, products{ 3, "pro", 2, 3 });
+
+			if (!result2.affected_rows())
+				return false;
+
+			auto result3 = march::insert(pool, products{ 4, "pro", 2, 3 });
+
+			if (!result3.affected_rows())
+				return false;
+
+			return true;
+		});
 
 	BOOST_CHECK(res == true);
 
@@ -78,78 +77,149 @@ BOOST_AUTO_TEST_CASE(connect)
 	t.join();
 }
 
+BOOST_AUTO_TEST_CASE(async)
+{
+	march::io_service_pool io_pool{ 5 };
+
+	march::db_service_pool<march::db_service> pool(io_pool, "172.26.4.15", march::default_port_string, "kcwl", "123456",
+												   "test_mysql");
+
+	std::thread t([&] { io_pool.run(); });
+
+	auto result = march::insert(pool, products{ 1, "pro", 2, 3 });
+
+	BOOST_CHECK_EQUAL(result.affected_rows(), 1);
+
+	march::async_insert(pool, products{ 1, "pro", 2, 3 },
+						[](auto result, auto ec)
+						{
+							BOOST_CHECK(!ec);
+							BOOST_CHECK_EQUAL(result.affected_rows(), 1);
+						});
+
+	march::async_select_if<products>(pool, MAR_EXPR(prod_id) == 1,
+									 [](auto result, auto ec)
+									 {
+										 BOOST_CHECK(!ec);
+
+										 auto& top_one = result.top<1, products>().back();
+
+										 BOOST_CHECK_EQUAL(top_one.prod_id, 1);
+										 BOOST_CHECK_EQUAL(top_one.prod_name, "pro");
+										 BOOST_CHECK_EQUAL(top_one.prod_price, 2);
+										 BOOST_CHECK_EQUAL(top_one.vend_id, 3);
+									 });
+
+	march::async_remove_if<products>(pool, MAR_EXPR(prod_id) == 1,
+									 [](auto result, auto ec)
+									 {
+										 BOOST_CHECK(!ec);
+
+										 BOOST_CHECK_EQUAL(result.affected_rows(), 1);
+									 });
+
+	std::this_thread::sleep_for(1s);
+
+	using trans_t = transaction<march::db_service>;
+
+	pool.async_transactions(
+		[&]()
+		{
+			auto result1 = march::insert(pool, products{ 2, "pro", 2, 3 });
+
+			if (!result1.affected_rows())
+				return false;
+
+			auto result2 = march::insert(pool, products{ 3, "pro", 2, 3 });
+
+			if (!result2.affected_rows())
+				return false;
+
+			auto result3 = march::insert(pool, products{ 4, "pro", 2, 3 });
+
+			if (!result3.affected_rows())
+				return false;
+
+			return true;
+		},
+		[&](auto result, auto ec)
+		{
+			BOOST_CHECK(!ec);
+
+			BOOST_CHECK(result.affected_rows() == 3);
+		});
+
+	std::this_thread::sleep_for(1s);
+
+	io_pool.stop();
+	t.join();
+}
+
 BOOST_AUTO_TEST_CASE(sql)
 {
-	mysql::io_service_pool io_pool{ 5 };
+	march::io_service_pool io_pool{ 5 };
 
-	mysql::service_pool<mysql::mysql_connect> pool(io_pool, "172.26.4.15", boost::mysql::default_port_string,
-														 "kcwl", "123456", "test_mysql");
+	march::db_service_pool<march::db_service> pool(io_pool, "172.26.4.15", march::default_port_string, "kcwl", "123456",
+												   "test_mysql");
 
 	{
-		using mysql_sql = mysql::select_chain<mysql::mysql_connect>;
+		using mysql_sql = march::select_chain<march::db_service>;
 
-		auto sql = mysql_sql(pool).select<products, AQUARIUS_SQL_BIND(prod_name)>().sql();
+		auto sql = mysql_sql(pool).select<products, SQL_BIND(prod_name)>().sql();
 
 		BOOST_CHECK_EQUAL(sql, "select prod_name from products");
 
-		sql = mysql_sql(pool).select<products, AQUARIUS_SQL_BIND(prod_id, prod_name, prod_price)>().sql();
+		sql = mysql_sql(pool).select<products, SQL_BIND(prod_id, prod_name, prod_price)>().sql();
 
 		BOOST_CHECK_EQUAL(sql, "select prod_id, prod_name, prod_price from products");
 
 		BOOST_CHECK_EQUAL(mysql_sql(pool).select<products>().sql(), "select * from products");
 
-		sql = mysql_sql(pool).select_distinct<products, AQUARIUS_SQL_BIND(vend_id)>().sql();
+		sql = mysql_sql(pool).select_distinct<products, SQL_BIND(vend_id)>().sql();
 		BOOST_CHECK_EQUAL(sql, "select distinct vend_id from products");
 
-		sql = mysql_sql(pool).select_top<products, 5, AQUARIUS_SQL_BIND(prod_name)>().sql();
+		sql = mysql_sql(pool).select_top<products, 5, SQL_BIND(prod_name)>().sql();
 
 		BOOST_CHECK_EQUAL(sql, "select top 5 prod_name from products");
 
-		sql = mysql_sql(pool).select<products, AQUARIUS_SQL_BIND(prod_name)>().limit<5>().sql();
+		sql = mysql_sql(pool).select<products, SQL_BIND(prod_name)>().limit<5>().sql();
 		BOOST_CHECK_EQUAL(sql, "select prod_name from products limit 5");
 
-		sql = mysql_sql(pool).select<products, AQUARIUS_SQL_BIND(prod_name)>().limit<5>().offset<5>().sql();
+		sql = mysql_sql(pool).select<products, SQL_BIND(prod_name)>().limit<5>().offset<5>().sql();
 		BOOST_CHECK_EQUAL(sql, "select prod_name from products limit 5 offset 5");
 
-		sql = mysql_sql(pool)
-				  .select<products, AQUARIUS_SQL_BIND(prod_name)>()
-				  .order_by<AQUARIUS_SQL_BIND(prod_name)>()
-				  .sql();
+		sql = mysql_sql(pool).select<products, SQL_BIND(prod_name)>().order_by<SQL_BIND(prod_name)>().sql();
 		BOOST_CHECK_EQUAL(sql, "select prod_name from products order by prod_name");
 
 		sql = mysql_sql(pool)
-				  .select<products, AQUARIUS_SQL_BIND(prod_id, prod_price, prod_name)>()
-				  .order_by<AQUARIUS_SQL_BIND(prod_price, prod_name)>()
+				  .select<products, SQL_BIND(prod_id, prod_price, prod_name)>()
+				  .order_by<SQL_BIND(prod_price, prod_name)>()
 				  .sql();
 		BOOST_CHECK_EQUAL(sql, "select prod_id, prod_price, prod_name from products order by prod_price, prod_name");
 
-		sql = mysql_sql(pool)
-				  .select<products, AQUARIUS_SQL_BIND(prod_id, prod_price, prod_name)>()
-				  .order_by_index<2, 3>()
-				  .sql();
+		sql = mysql_sql(pool).select<products, SQL_BIND(prod_id, prod_price, prod_name)>().order_by_index<2, 3>().sql();
 		BOOST_CHECK_EQUAL(sql, "select prod_id, prod_price, prod_name from products order by 2, 3");
 
-		sql =
-			mysql_sql(pool).select<products, AQUARIUS_SQL_BIND(vend_id)>().group_by<AQUARIUS_SQL_BIND(vend_id)>().sql();
+		sql = mysql_sql(pool).select<products, SQL_BIND(vend_id)>().group_by<SQL_BIND(vend_id)>().sql();
 		BOOST_CHECK_EQUAL(sql, "select vend_id from products group by vend_id");
 
 		sql = mysql_sql(pool)
-				  .select<products, AQUARIUS_SQL_BIND(vend_id)>()
-				  .group_by<AQUARIUS_SQL_BIND(vend_id)>()
-				  .having(AQUARIUS_EXPR(vend_id) > 2)
+				  .select<products, SQL_BIND(vend_id)>()
+				  .group_by<SQL_BIND(vend_id)>()
+				  .having(MAR_EXPR(vend_id) > 2)
 				  .sql();
 		BOOST_CHECK_EQUAL(sql, "select vend_id from products group by vend_id having vend_id > 2");
 
 		sql = mysql_sql(pool)
-				  .select<products, AQUARIUS_SQL_BIND(prod_name, prod_price)>()
-				  .where(AQUARIUS_EXPR(prod_price) == 3.49)
+				  .select<products, SQL_BIND(prod_name, prod_price)>()
+				  .where(MAR_EXPR(prod_price) == 3.49)
 				  .sql();
 
 		BOOST_CHECK_EQUAL(sql, "select prod_name, prod_price from Products where prod_price = 3.49");
 
 		sql = mysql_sql(pool)
-				  .select<products, AQUARIUS_SQL_BIND(prod_name, prod_price)>()
-				  .where(AQUARIUS_EXPR(prod_name) != "3.49" | AQUARIUS_EXPR(prod_name) <= "3.91")
+				  .select<products, SQL_BIND(prod_name, prod_price)>()
+				  .where(MAR_EXPR(prod_name) != "3.49" | MAR_EXPR(prod_name) <= "3.91")
 				  .sql();
 
 		BOOST_CHECK_EQUAL(
@@ -157,27 +227,27 @@ BOOST_AUTO_TEST_CASE(sql)
 	}
 
 	{
-		using mysql_sql = mysql::chain_sql<mysql::mysql_connect>;
+		using mysql_sql = march::chain_sql<march::db_service>;
 
 		BOOST_CHECK_EQUAL(mysql_sql(pool).insert(products{ 1, "peter", 2, 3 }).sql(),
 						  "insert into products values(1,'peter',2,3)");
 	}
 
 	{
-		using mysql_sql = mysql::chain_sql<mysql::mysql_connect>;
+		using mysql_sql = march::chain_sql<march::db_service>;
 
 		BOOST_CHECK_EQUAL(mysql_sql(pool).remove<products>().sql(), "delete from products");
 	}
 
 	{
-		using mysql_sql = mysql::chain_sql<mysql::mysql_connect>;
+		using mysql_sql = march::chain_sql<march::db_service>;
 
 		BOOST_CHECK_EQUAL(mysql_sql(pool).update(products{ 1, "candy", 3, 5 }).sql(),
 						  "update person set age = 1 and name = 'candy'");
 	}
 
 	{
-		using mysql_sql = mysql::chain_sql<mysql::mysql_connect>;
+		using mysql_sql = march::chain_sql<march::db_service>;
 
 		BOOST_CHECK_EQUAL(mysql_sql(pool).replace(products{ 1, "ridy", 6, 7 }).sql(),
 						  "replace into products values(1,'ridy',6,7)");
@@ -186,9 +256,10 @@ BOOST_AUTO_TEST_CASE(sql)
 
 BOOST_AUTO_TEST_CASE(transactions)
 {
-	using trans_t = transaction<mysql::mysql_connect>;
+	using trans_t = transaction<march::db_service>;
 
-	auto result = trans_t(nullptr, trans_t::isolation_level::no_repeated_read,trans_t::isolation_scope::current).execute([]() {return true; });
+	auto result = trans_t(nullptr, trans_t::isolation_level::no_repeated_read, trans_t::isolation_scope::current)
+					  .execute([]() { return true; });
 
 	BOOST_CHECK(result == false);
 }

@@ -1,15 +1,15 @@
 #pragma once
-#include "mysql/algorithm.hpp"
-#include "mysql/keyword.hpp"
-#include "mysql/string_literal.hpp"
-#include "mysql/concepts.hpp"
+#include "algorithm.hpp"
+#include "concepts.hpp"
+#include "keyword.hpp"
+#include "string_literal.hpp"
 
-namespace mysql
+namespace march
 {
 	template <string_literal sl>
-	class attributes
+	class attributes final
 	{
-		static constexpr std::string_view sql_begin = concat_v<SPACE, bind_param<sl>::value>;
+		static constexpr std::string_view sql_begin = detail::concat_v<SPACE, bind_param<sl>::value>;
 
 	public:
 		attributes() = default;
@@ -20,7 +20,7 @@ namespace mysql
 		template <typename _Ty>
 		attributes& operator==(_Ty&& t)
 		{
-			constexpr auto sql = concat_v<sql_begin, SPACE, EQUAL, SPACE>;
+			constexpr auto sql = detail::concat_v<sql_begin, SPACE, EQUAL, SPACE>;
 
 			attr_str_ += sql;
 			add_value(std::forward<_Ty>(t));
@@ -31,7 +31,7 @@ namespace mysql
 		template <typename _Ty>
 		attributes& operator!=(_Ty&& t)
 		{
-			constexpr auto sql = concat_v<sql_begin, SPACE, NOT, EQUAL, SPACE>;
+			constexpr auto sql = detail::concat_v<sql_begin, SPACE, NOT, EQUAL, SPACE>;
 
 			attr_str_ += sql;
 			add_value(std::forward<_Ty>(t));
@@ -42,7 +42,7 @@ namespace mysql
 		template <typename _Ty>
 		attributes& operator<(_Ty&& t)
 		{
-			constexpr auto sql = concat_v<sql_begin, SPACE, LESS, SPACE>;
+			constexpr auto sql = detail::concat_v<sql_begin, SPACE, LESS, SPACE>;
 
 			attr_str_ += sql;
 			add_value(std::forward<_Ty>(t));
@@ -53,7 +53,7 @@ namespace mysql
 		template <typename _Ty>
 		attributes& operator<=(_Ty&& t)
 		{
-			constexpr auto sql = concat_v<sql_begin, SPACE, LESS, EQUAL, SPACE>;
+			constexpr auto sql = detail::concat_v<sql_begin, SPACE, LESS, EQUAL, SPACE>;
 
 			attr_str_ += sql;
 			add_value(std::forward<_Ty>(t));
@@ -64,7 +64,7 @@ namespace mysql
 		template <typename _Ty>
 		attributes& operator>(_Ty&& t)
 		{
-			constexpr auto sql = concat_v<sql_begin, SPACE, GREATER, SPACE>;
+			constexpr auto sql = detail::concat_v<sql_begin, SPACE, GREATER, SPACE>;
 
 			attr_str_ += sql;
 			add_value(std::forward<_Ty>(t));
@@ -75,7 +75,7 @@ namespace mysql
 		template <typename _Ty>
 		attributes& operator>=(_Ty&& t)
 		{
-			constexpr auto sql = concat_v<sql_begin, SPACE, GREATER, EQUAL, SPACE>;
+			constexpr auto sql = detail::concat_v<sql_begin, SPACE, GREATER, EQUAL, SPACE>;
 
 			attr_str_ += sql;
 			add_value(std::forward<_Ty>(t));
@@ -85,7 +85,7 @@ namespace mysql
 
 		attributes& operator|(const attributes& other)
 		{
-			attr_str_ += concat_v<SPACE, OR>;
+			attr_str_ += detail::concat_v<SPACE, OR>;
 			attr_str_ += other.attr_str_;
 
 			return *this;
@@ -93,7 +93,7 @@ namespace mysql
 
 		attributes& operator&(const attributes& other)
 		{
-			attr_str_ += concat_v<SPACE, AND>;
+			attr_str_ += detail::concat_v<SPACE, AND>;
 
 			attr_str_ += other.attr_str_;
 
@@ -124,6 +124,6 @@ namespace mysql
 	private:
 		std::string attr_str_;
 	};
-} // namespace mysql
+} // namespace march
 
-#define AQUARIUS_EXPR(attr) mysql::attributes<#attr>()
+#define MAR_EXPR(attr) march::attributes<#attr>()

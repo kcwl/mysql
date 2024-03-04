@@ -1,12 +1,12 @@
 #pragma once
+#include "algorithm.hpp"
+#include "string_literal.hpp"
 #include <array>
 #include <string_view>
-#include "mysql/string_literal.hpp"
-#include "mysql/algorithm.hpp"
 
-namespace mysql
+namespace march
 {
-	namespace impl
+	namespace detail
 	{
 		template <int A, int B>
 		struct get_power
@@ -65,9 +65,9 @@ namespace mysql
 	struct to_string
 	{
 	private:
-		constexpr static auto arr = impl::to_array<N>();
+		constexpr static auto arr = detail::to_array<N>();
 
 	public:
-		constexpr static auto value = impl::to_string_view<decltype(arr), arr>();
+		constexpr static auto value = detail::to_string_view<decltype(arr), arr>();
 	};
 }

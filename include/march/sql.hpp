@@ -1,51 +1,72 @@
 #pragma once
-#include "mysql/reflect.hpp"
-#include "mysql/attributes.hpp"
-#include "mysql/generate_sql.hpp"
-#include "mysql/service_pool.hpp"
-#include "mysql/to_string.hpp"
+#include "attributes.hpp"
+#include "generate.hpp"
+#include "reflect.hpp"
+#include "service_pool.hpp"
+#include "to_string.hpp"
 #include <vector>
 
 using namespace std::string_view_literals;
 
-namespace mysql
+namespace march
 {
 	template <typename _Service>
 	class basic_sql
 	{
 	public:
-		explicit basic_sql(service_pool<_Service>& pool)
+		explicit basic_sql(db_service_pool<_Service>& pool)
 			: pool_(pool)
 		{}
 
 		~basic_sql() = default;
 
 	public:
-		bool execute()
+		results execute()
+		{
+			error_code ec{};
+
+			auto result = execute(ec);
+
+			throw std::exception(ec.message());
+
+			return result;
+		}
+
+		results execute(error_code& ec)
 		{
 			sql_str_ += ";";
 
-			return pool_.execute(sql_str_);
+			return pool_.execute(sql_str_, ec);
 		}
 
 		template <typename _Func>
-		auto async_execute(_Func&& f)
+		void async_execute(_Func&& f)
 		{
 			sql_str_ += ";";
 
 			return pool_.async_execute(sql_str_, std::forward<_Func>(f));
 		}
 
-		template <typename _Ty>
-		std::vector<_Ty> query()
+		results query()
+		{
+			error_code ec{};
+
+			auto result = query(ec);
+
+			throw std::exception(ec.message());
+
+			return result;
+		}
+
+		results query(error_code& ec)
 		{
 			sql_str_ += ";";
 
-			return pool_.template query<_Ty>(sql_str_);
+			return pool_.query(sql_str_, ec);
 		}
 
 		template <typename _Ty, typename _Func>
-		auto async_query(_Func&& f)
+		void async_query(_Func&& f)
 		{
 			sql_str_ += ";";
 
@@ -61,14 +82,14 @@ namespace mysql
 		std::string sql_str_;
 
 	private:
-		service_pool<_Service>& pool_;
+		db_service_pool<_Service>& pool_;
 	};
 
 	template <typename _Service>
 	class chain_sql : public basic_sql<_Service>
 	{
 	public:
-		chain_sql(service_pool<_Service>& pool)
+		chain_sql(db_service_pool<_Service>& pool)
 			: basic_sql<_Service>(pool)
 		{}
 
@@ -117,7 +138,7 @@ namespace mysql
 		chain_sql& where_between()
 		{
 			constexpr auto sql =
-				concat_v<SPACE, WHERE, SPACE, BETWEEN, SPACE, left_value, SPACE, AND, SPACE, right_value, SEPARATOR>;
+				detail::concat_v<SPACE, WHERE, SPACE, BETWEEN, SPACE, left_value, SPACE, AND, SPACE, right_value, SEPARATOR>;
 
 			if (this->sql_str_.empty())
 				return *this;
@@ -133,7 +154,7 @@ namespace mysql
 		template <typename _Ty>
 		chain_sql& where_is_null()
 		{
-			constexpr auto sql = concat_v<SPACE, WHERE, SPACE, name<_Ty>(), SPACE, IS_NULL, SEPARATOR>;
+			constexpr auto sql = detail::concat_v<SPACE, WHERE, SPACE, name<_Ty>(), SPACE, IS_NULL, SEPARATOR>;
 
 			if (this->sql_str_.empty())
 				return *this;
@@ -151,31 +172,31 @@ namespace mysql
 	class select_chain : public chain_sql<_Service>
 	{
 	public:
-		explicit select_chain(service_pool<_Service>& pool)
+		explicit select_chain(db_service_pool<_Service>& pool)
 			: chain_sql<_Service>(pool)
 		{}
 
 	public:
-		template <typename _From, string_literal... args>
+		template <typename _From, string_literal... Args>
 		select_chain& select()
 		{
-			make_select_sql<_From, bind_param<"">::value, bind_param<args>::value...>(this->sql_str_);
+			make_select_sql<_From, bind_param<"">::value, bind_param<Args>::value...>(this->sql_str_);
 
 			return *this;
 		}
 
-		template <typename _From, string_literal... args>
+		template <typename _From, string_literal... Args>
 		select_chain& select_distinct()
 		{
-			make_select_sql<_From, concat_v<DISTINCT, SPACE>, bind_param<args>::value...>(this->sql_str_);
+			make_select_sql<_From, detail::concat_v<DISTINCT, SPACE>, bind_param<Args>::value...>(this->sql_str_);
 
 			return *this;
 		}
 
-		template <typename _From, std::size_t N, string_literal... args>
+		template <typename _From, std::size_t N, string_literal... Args>
 		select_chain& select_top()
 		{
-			make_select_sql<_From, concat_v<TOP, SPACE, to_string<N>::value, SPACE>, bind_param<args>::value...>(
+			make_select_sql<_From, detail::concat_v<TOP, SPACE, to_string<N>::value, SPACE>, bind_param<Args>::value...>(
 				this->sql_str_);
 
 			return *this;
@@ -184,7 +205,7 @@ namespace mysql
 		template <std::size_t N>
 		select_chain& limit()
 		{
-			make_cat<concat_v<SPACE, LIMIT, SPACE, to_string<N>::value>>(this->sql_str_);
+			make_cat<detail::concat_v<SPACE, LIMIT, SPACE, to_string<N>::value>>(this->sql_str_);
 
 			return *this;
 		}
@@ -192,15 +213,15 @@ namespace mysql
 		template <std::size_t N>
 		select_chain& offset()
 		{
-			make_cat<concat_v<SPACE, OFFSET, SPACE, to_string<N>::value>>(this->sql_str_);
+			make_cat<detail::concat_v<SPACE, OFFSET, SPACE, to_string<N>::value>>(this->sql_str_);
 
 			return *this;
 		}
 
-		template <string_literal... args>
+		template <string_literal... Args>
 		select_chain& order_by()
 		{
-			make_cat<concat_v<SPACE, ORDER, SPACE, BY, SPACE>, bind_param<args>::value...>(this->sql_str_);
+			make_cat<detail::concat_v<SPACE, ORDER, SPACE, BY, SPACE>, bind_param<Args>::value...>(this->sql_str_);
 
 			return *this;
 		}
@@ -208,15 +229,15 @@ namespace mysql
 		template <std::size_t... I>
 		select_chain& order_by_index()
 		{
-			make_cat<concat_v<SPACE, ORDER, SPACE, BY, SPACE>, to_string<I>::value...>(this->sql_str_);
+			make_cat<detail::concat_v<SPACE, ORDER, SPACE, BY, SPACE>, to_string<I>::value...>(this->sql_str_);
 
 			return *this;
 		}
 
-		template <string_literal... args>
+		template <string_literal... Args>
 		select_chain& group_by()
 		{
-			make_cat<concat_v<SPACE, GROUP, SPACE, BY, SPACE>, bind_param<args>::value...>(this->sql_str_);
+			make_cat<detail::concat_v<SPACE, GROUP, SPACE, BY, SPACE>, bind_param<Args>::value...>(this->sql_str_);
 
 			return *this;
 		}
@@ -229,4 +250,4 @@ namespace mysql
 			return *this;
 		}
 	};
-} // namespace mysql
+} // namespace march
