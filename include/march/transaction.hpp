@@ -26,7 +26,7 @@ namespace march
 			transaction_guard(transaction& trans)
 				: trans_(trans)
 			{
-
+				trans_.start();
 			}
 
 			~transaction_guard()
@@ -117,6 +117,16 @@ namespace march
 		}
 
 	private:
+		void start()
+		{
+			error_code ec;
+
+			if (!conn_service_ptr_)
+				return;
+
+			conn_service_ptr_->execute("begin", ec);
+		}
+
 		void commit()
 		{
 			error_code ec;

@@ -61,6 +61,9 @@ namespace march
 
 		std::size_t affected_rows()
 		{
+			if (!result_.has_value())
+				return 0;
+
 			return result_.affected_rows();
 		}
 
@@ -86,6 +89,6 @@ namespace march
 		}
 
 	private:
-		boost::mysql::results& result_;
+		boost::mysql::results result_;
 	};
 } // namespace march

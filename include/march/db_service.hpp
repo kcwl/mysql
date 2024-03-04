@@ -105,7 +105,14 @@ namespace march
 	private:
 		void run()
 		{
-			mysql_ptr_->async_connect(*endpoint_.begin(), *params_, [](auto) {});
+			mysql_ptr_->async_connect(*endpoint_.begin(), *params_, 
+				[](auto ec) 
+				{
+					if (ec)
+					{
+						std::cout << "maybe connect mysql occur error: " << ec.message() << std::endl;
+					}
+				});
 		}
 
 	private:

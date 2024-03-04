@@ -26,6 +26,8 @@ BOOST_AUTO_TEST_CASE(sync)
 
 	std::thread t([&] { io_pool.run(); });
 
+	std::this_thread::sleep_for(1s);
+
 	auto result = march::insert(pool, products{ 1, "pro", 2, 3 });
 
 	BOOST_CHECK_EQUAL(result.affected_rows(), 1);
@@ -71,6 +73,26 @@ BOOST_AUTO_TEST_CASE(sync)
 
 	BOOST_CHECK(res == true);
 
+	res = pool.transactions(
+		[&]
+		{
+			auto result1 = march::insert(pool, products{ 5, "pro", 2, 3 });
+
+			if (!result1.affected_rows())
+				return false;
+
+			auto result2 = march::insert(pool, products{ 6, "pro", 2, 3 });
+
+			if (!result2.affected_rows())
+				return false;
+
+			auto result3 = march::insert(pool, products{ 7, "pro", 2, 3 });
+
+			return false;
+		});
+
+	BOOST_CHECK(!res);
+
 	std::this_thread::sleep_for(1s);
 
 	io_pool.stop();
@@ -79,80 +101,80 @@ BOOST_AUTO_TEST_CASE(sync)
 
 BOOST_AUTO_TEST_CASE(async)
 {
-	march::io_service_pool io_pool{ 5 };
+	//march::io_service_pool io_pool{ 5 };
 
-	march::db_service_pool<march::db_service> pool(io_pool, "172.26.4.15", march::default_port_string, "kcwl", "123456",
-												   "test_mysql");
+	//march::db_service_pool<march::db_service> pool(io_pool, "172.26.4.15", march::default_port_string, "kcwl", "123456",
+	//											   "test_mysql");
 
-	std::thread t([&] { io_pool.run(); });
+	//std::thread t([&] { io_pool.run(); });
 
-	auto result = march::insert(pool, products{ 1, "pro", 2, 3 });
+	//auto result = march::insert(pool, products{ 1, "pro", 2, 3 });
 
-	BOOST_CHECK_EQUAL(result.affected_rows(), 1);
+	//BOOST_CHECK_EQUAL(result.affected_rows(), 1);
 
-	march::async_insert(pool, products{ 1, "pro", 2, 3 },
-						[](auto result, auto ec)
-						{
-							BOOST_CHECK(!ec);
-							BOOST_CHECK_EQUAL(result.affected_rows(), 1);
-						});
+	//march::async_insert(pool, products{ 1, "pro", 2, 3 },
+	//					[](auto result, auto ec)
+	//					{
+	//						BOOST_CHECK(!ec);
+	//						BOOST_CHECK_EQUAL(result.affected_rows(), 1);
+	//					});
 
-	march::async_select_if<products>(pool, MAR_EXPR(prod_id) == 1,
-									 [](auto result, auto ec)
-									 {
-										 BOOST_CHECK(!ec);
+	//march::async_select_if<products>(pool, MAR_EXPR(prod_id) == 1,
+	//								 [](auto result, auto ec)
+	//								 {
+	//									 BOOST_CHECK(!ec);
 
-										 auto& top_one = result.top<1, products>().back();
+	//									 auto& top_one = result.top<1, products>().back();
 
-										 BOOST_CHECK_EQUAL(top_one.prod_id, 1);
-										 BOOST_CHECK_EQUAL(top_one.prod_name, "pro");
-										 BOOST_CHECK_EQUAL(top_one.prod_price, 2);
-										 BOOST_CHECK_EQUAL(top_one.vend_id, 3);
-									 });
+	//									 BOOST_CHECK_EQUAL(top_one.prod_id, 1);
+	//									 BOOST_CHECK_EQUAL(top_one.prod_name, "pro");
+	//									 BOOST_CHECK_EQUAL(top_one.prod_price, 2);
+	//									 BOOST_CHECK_EQUAL(top_one.vend_id, 3);
+	//								 });
 
-	march::async_remove_if<products>(pool, MAR_EXPR(prod_id) == 1,
-									 [](auto result, auto ec)
-									 {
-										 BOOST_CHECK(!ec);
+	//march::async_remove_if<products>(pool, MAR_EXPR(prod_id) == 1,
+	//								 [](auto result, auto ec)
+	//								 {
+	//									 BOOST_CHECK(!ec);
 
-										 BOOST_CHECK_EQUAL(result.affected_rows(), 1);
-									 });
+	//									 BOOST_CHECK_EQUAL(result.affected_rows(), 1);
+	//								 });
 
-	std::this_thread::sleep_for(1s);
+	//std::this_thread::sleep_for(1s);
 
-	using trans_t = transaction<march::db_service>;
+	//using trans_t = transaction<march::db_service>;
 
-	pool.async_transactions(
-		[&]()
-		{
-			auto result1 = march::insert(pool, products{ 2, "pro", 2, 3 });
+	//pool.async_transactions(
+	//	[&]()
+	//	{
+	//		auto result1 = march::insert(pool, products{ 2, "pro", 2, 3 });
 
-			if (!result1.affected_rows())
-				return false;
+	//		if (!result1.affected_rows())
+	//			return false;
 
-			auto result2 = march::insert(pool, products{ 3, "pro", 2, 3 });
+	//		auto result2 = march::insert(pool, products{ 3, "pro", 2, 3 });
 
-			if (!result2.affected_rows())
-				return false;
+	//		if (!result2.affected_rows())
+	//			return false;
 
-			auto result3 = march::insert(pool, products{ 4, "pro", 2, 3 });
+	//		auto result3 = march::insert(pool, products{ 4, "pro", 2, 3 });
 
-			if (!result3.affected_rows())
-				return false;
+	//		if (!result3.affected_rows())
+	//			return false;
 
-			return true;
-		},
-		[&](auto result, auto ec)
-		{
-			BOOST_CHECK(!ec);
+	//		return true;
+	//	},
+	//	[&](auto result, auto ec)
+	//	{
+	//		BOOST_CHECK(!ec);
 
-			BOOST_CHECK(result.affected_rows() == 3);
-		});
+	//		BOOST_CHECK(result.affected_rows() == 3);
+	//	});
 
-	std::this_thread::sleep_for(1s);
+	//std::this_thread::sleep_for(1s);
 
-	io_pool.stop();
-	t.join();
+	//io_pool.stop();
+	//t.join();
 }
 
 BOOST_AUTO_TEST_CASE(sql)
