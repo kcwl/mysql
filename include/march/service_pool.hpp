@@ -181,19 +181,14 @@ namespace march
 
 	public:
 		template <typename... _Args>
-		db_async_pool(_Args&&... Args)
-			: io_service_()
+		db_async_pool(boost::asio::io_service& io_service, _Args&&... Args)
+			: io_service_(io_service)
 			, service_ptr_(nullptr)
 		{
 			make_service(std::forward<_Args>(Args)...);
 		}
 
 	public:
-		void run()
-		{
-			io_service_.run();
-		}
-
 		void stop()
 		{
 			service_ptr_->async_close(
@@ -237,7 +232,7 @@ namespace march
 		}
 
 	private:
-		boost::asio::io_service io_service_;
+		boost::asio::io_service& io_service_;
 
 		service_ptr_t service_ptr_;
 	};

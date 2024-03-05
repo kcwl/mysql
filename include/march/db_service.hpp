@@ -49,7 +49,10 @@ namespace march
 		template <typename _Func>
 		void async_connect(_Func&& f)
 		{
-			return mysql_ptr_->async_connect(*endpoint_.begin(), *params_, std::forward<_Func>(f));
+			auto future = mysql_ptr_->async_connect(*endpoint_.begin(), *params_, boost::asio::use_future);
+			future.get();
+
+			return ;
 		}
 
 		void close()

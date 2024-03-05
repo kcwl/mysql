@@ -103,18 +103,11 @@ struct products
 //	t.join();
 //}
 
-using boost::mysql::error_code;
-
-void print_employee(boost::mysql::row_view employee)
-{
-	std::cout << "Employee '" << employee.at(0) << " "   // first_name (string)
-		<< employee.at(1) << "' earns "            // last_name  (string)
-		<< employee.at(2) << " dollars yearly\n";  // salary     (double)
-}
-
 BOOST_AUTO_TEST_CASE(async)
 {
-	march::async_pool pool("172.26.4.15", march::default_port_string, "kcwl", "123456",
+	boost::asio::io_service io_service;
+
+	march::async_pool pool(io_service, "172.26.4.15", march::default_port_string, "kcwl", "123456",
 												   "test_mysql");
 
 	march::async_insert(pool, products{ 1, "pro", 2, 3 },
@@ -175,7 +168,7 @@ BOOST_AUTO_TEST_CASE(async)
 	//		BOOST_CHECK(result.affected_rows() == 3);
 	//	});
 
-	pool.run();
+	io_service.run();
 
 	pool.stop();
 }
