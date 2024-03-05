@@ -2,7 +2,6 @@
 #include "attributes.hpp"
 #include "generate.hpp"
 #include "reflect.hpp"
-#include "service_pool.hpp"
 #include "to_string.hpp"
 #include <vector>
 
@@ -10,29 +9,32 @@ using namespace std::string_view_literals;
 
 namespace march
 {
-	template <typename _Service>
+	template <typename _Pool>
 	class basic_sql
 	{
+		using service_t = typename _Pool::service_t;
+
 	public:
-		explicit basic_sql(db_service_pool<_Service>& pool)
+		explicit basic_sql(_Pool& pool)
 			: pool_(pool)
 		{}
 
 		~basic_sql() = default;
 
 	public:
-		results execute()
+		auto execute()
 		{
 			error_code ec{};
 
 			auto result = execute(ec);
 
-			throw std::exception(ec.message());
+			if(ec)
+				throw std::exception(ec.message());
 
 			return result;
 		}
 
-		results execute(error_code& ec)
+		auto execute(error_code& ec)
 		{
 			sql_str_ += ";";
 
@@ -47,32 +49,6 @@ namespace march
 			return pool_.async_execute(sql_str_, std::forward<_Func>(f));
 		}
 
-		results query()
-		{
-			error_code ec{};
-
-			auto result = query(ec);
-
-			throw std::exception(ec.message());
-
-			return result;
-		}
-
-		results query(error_code& ec)
-		{
-			sql_str_ += ";";
-
-			return pool_.query(sql_str_, ec);
-		}
-
-		template <typename _Ty, typename _Func>
-		void async_query(_Func&& f)
-		{
-			sql_str_ += ";";
-
-			return pool_.template async_query<_Ty>(sql_str_, std::forward<_Func>(f));
-		}
-
 		std::string sql()
 		{
 			return sql_str_;
@@ -82,15 +58,15 @@ namespace march
 		std::string sql_str_;
 
 	private:
-		db_service_pool<_Service>& pool_;
+		_Pool& pool_;
 	};
 
-	template <typename _Service>
-	class chain_sql : public basic_sql<_Service>
+	template <typename _Pool>
+	class chain_sql : public basic_sql<_Pool>
 	{
 	public:
-		chain_sql(db_service_pool<_Service>& pool)
-			: basic_sql<_Service>(pool)
+		chain_sql(_Pool& pool)
+			: basic_sql<_Pool>(pool)
 		{}
 
 	public:
@@ -168,12 +144,14 @@ namespace march
 		}
 	};
 
-	template <typename _Service>
-	class select_chain : public chain_sql<_Service>
+	template <typename _Pool>
+	class select_chain : public chain_sql<_Pool>
 	{
+		using base_type = chain_sql<_Pool>;
+
 	public:
-		explicit select_chain(db_service_pool<_Service>& pool)
-			: chain_sql<_Service>(pool)
+		explicit select_chain(_Pool& pool)
+			: base_type(pool)
 		{}
 
 	public:

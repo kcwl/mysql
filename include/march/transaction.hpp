@@ -18,12 +18,12 @@ namespace march
 	}
 
 	template<typename _Service>
-	class transaction
+	class sql_transaction
 	{
 		class transaction_guard
 		{
 		public:
-			transaction_guard(transaction& trans)
+			transaction_guard(sql_transaction& trans)
 				: trans_(trans)
 			{
 				trans_.start();
@@ -35,10 +35,10 @@ namespace march
 			}
 
 		private:
-			transaction& trans_;
+			sql_transaction& trans_;
 		};
 
-		friend class transaction::transaction_guard;
+		friend class sql_transaction::transaction_guard;
 
 	public:
 		enum class isolation_level
@@ -57,7 +57,7 @@ namespace march
 		};
 
 	public:
-		explicit transaction(_Service* conn_ptr, isolation_level level, isolation_scope scope, bool consistant = true)
+		explicit sql_transaction(_Service* conn_ptr, isolation_level level, isolation_scope scope, bool consistant = true)
 			: conn_service_ptr_(conn_ptr)
 			, finish_(true)
 		{
