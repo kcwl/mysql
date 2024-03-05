@@ -17,161 +17,157 @@ struct products
 	int vend_id;
 };
 
-//BOOST_AUTO_TEST_CASE(sync)
-//{
-//	march::io_service_pool io_pool{ 5 };
-//
-//	march::db_sync_pool<march::db_service> pool(io_pool, "172.26.4.15", march::default_port_string, "kcwl", "123456",
-//												   "test_mysql");
-//
-//	std::thread t([&] { io_pool.run(); });
-//
-//	std::this_thread::sleep_for(1s);
-//
-//	auto result = march::insert(pool, products{ 1, "pro", 2, 3 });
-//
-//	BOOST_CHECK_EQUAL(result.affected_rows(), 1);
-//
-//	auto select_result = march::select_if<products>(pool, MAR_EXPR(prod_id) == 1).to_vector<products>();
-//
-//	if (!select_result.empty())
-//	{
-//		auto& last_one = select_result.back();
-//
-//		BOOST_CHECK_EQUAL(last_one.prod_id, 1);
-//		BOOST_CHECK_EQUAL(last_one.prod_name, "pro");
-//		BOOST_CHECK_EQUAL(last_one.prod_price, 2);
-//		BOOST_CHECK_EQUAL(last_one.vend_id, 3);
-//	}
-//
-//	auto remove_result = march::remove_if<products>(pool, MAR_EXPR(prod_id) == 1);
-//
-//	BOOST_CHECK_EQUAL(remove_result.affected_rows(), 1);
-//
-//	using trans_t = transaction<march::db_service>;
-//
-//	auto res = pool.transactions(
-//		[&]
-//		{
-//			auto result1 = march::insert(pool, products{ 2, "pro", 2, 3 });
-//
-//			if (!result1.affected_rows())
-//				return false;
-//
-//			auto result2 = march::insert(pool, products{ 3, "pro", 2, 3 });
-//
-//			if (!result2.affected_rows())
-//				return false;
-//
-//			auto result3 = march::insert(pool, products{ 4, "pro", 2, 3 });
-//
-//			if (!result3.affected_rows())
-//				return false;
-//
-//			return true;
-//		});
-//
-//	BOOST_CHECK(res == true);
-//
-//	res = pool.transactions(
-//		[&]
-//		{
-//			auto result1 = march::insert(pool, products{ 5, "pro", 2, 3 });
-//
-//			if (!result1.affected_rows())
-//				return false;
-//
-//			auto result2 = march::insert(pool, products{ 6, "pro", 2, 3 });
-//
-//			if (!result2.affected_rows())
-//				return false;
-//
-//			auto result3 = march::insert(pool, products{ 7, "pro", 2, 3 });
-//
-//			return false;
-//		});
-//
-//	BOOST_CHECK(!res);
-//
-//	auto remove_result_all = march::remove<products>(pool);
-//
-//	BOOST_CHECK(remove_result_all.affected_rows() != 1);
-//
-//	std::this_thread::sleep_for(1s);
-//
-//	io_pool.stop();
-//	t.join();
-//}
-
-BOOST_AUTO_TEST_CASE(async)
+BOOST_AUTO_TEST_CASE(sync)
 {
-	boost::asio::io_service io_service;
+	march::io_service_pool io_pool{ 5 };
 
-	march::async_pool pool(io_service, "172.26.4.15", march::default_port_string, "kcwl", "123456",
+	march::sync_pool pool(io_pool, "172.26.4.15", march::default_port_string, "kcwl", "123456",
 												   "test_mysql");
 
-	march::async_insert(pool, products{ 1, "pro", 2, 3 },
-						[&](auto result, auto ec)
-						{
-							BOOST_CHECK(!ec);
-							BOOST_CHECK_EQUAL(result.affected_rows(), 1);
+	auto result = march::insert(pool, products{ 1, "pro", 2, 3 });
 
-							march::async_select_if<products>(pool, MAR_EXPR(prod_id) == 1,
-								[&](auto result, auto ec)
-								{
-									BOOST_CHECK(!ec);
+	BOOST_CHECK(result!= 0);
 
-									auto& top_one = result.top<1, products>().back();
+	auto select_result = march::select_if<products>(pool, MAR_EXPR(prod_id) == 1);
 
-									BOOST_CHECK_EQUAL(top_one.prod_id, 1);
-									BOOST_CHECK_EQUAL(top_one.prod_name, "pro");
-									BOOST_CHECK_EQUAL(top_one.prod_price, 2);
-									BOOST_CHECK_EQUAL(top_one.vend_id, 3);
+	if (!select_result.empty())
+	{
+		auto& last_one = select_result.back();
 
-									march::async_remove_if<products>(pool, MAR_EXPR(prod_id) == 1,
-										[&](auto result, auto ec)
-										{
-											BOOST_CHECK(!ec);
+		BOOST_CHECK_EQUAL(last_one.prod_id, 1);
+		BOOST_CHECK_EQUAL(last_one.prod_name, "pro");
+		BOOST_CHECK_EQUAL(last_one.prod_price, 2);
+		BOOST_CHECK_EQUAL(last_one.vend_id, 3);
+	}
 
-											BOOST_CHECK_EQUAL(result.affected_rows(), 1);
-										});
+	auto remove_result = march::remove_if<products>(pool, MAR_EXPR(prod_id) == 1);
 
-								});
-						});
+	BOOST_CHECK(remove_result != 0);
 
-	//using trans_t = transaction<march::db_service>;
+	using trans_t = sql_transaction<march::db_service>;
 
-	//pool.async_transactions(
-	//	[&]()
-	//	{
-	//		auto result1 = march::insert(pool, products{ 2, "pro", 2, 3 });
+	auto res = pool.transactions(trans_t::isolation_level::no_repeated_read, trans_t::isolation_scope::current,true,
+		[&]
+		{
+			auto result1 = march::insert(pool, products{ 2, "pro", 2, 3 });
 
-	//		if (!result1.affected_rows())
-	//			return false;
+			if (!result1)
+				return false;
 
-	//		auto result2 = march::insert(pool, products{ 3, "pro", 2, 3 });
+			auto result2 = march::insert(pool, products{ 3, "pro", 2, 3 });
 
-	//		if (!result2.affected_rows())
-	//			return false;
+			if (!result2)
+				return false;
 
-	//		auto result3 = march::insert(pool, products{ 4, "pro", 2, 3 });
+			auto result3 = march::insert(pool, products{ 4, "pro", 2, 3 });
 
-	//		if (!result3.affected_rows())
-	//			return false;
+			if (!result3)
+				return false;
 
-	//		return true;
-	//	},
-	//	[&](auto result, auto ec)
-	//	{
-	//		BOOST_CHECK(!ec);
+			return true;
+		});
 
-	//		BOOST_CHECK(result.affected_rows() == 3);
-	//	});
+	BOOST_CHECK(res == true);
 
-	io_service.run();
+	res = pool.transactions(trans_t::isolation_level::no_repeated_read, trans_t::isolation_scope::current, true,
+		[&]
+		{
+			auto result1 = march::insert(pool, products{ 5, "pro", 2, 3 });
 
-	pool.stop();
+			if (!result1)
+				return false;
+
+			auto result2 = march::insert(pool, products{ 6, "pro", 2, 3 });
+
+			if (!result2)
+				return false;
+
+			march::insert(pool, products{ 7, "pro", 2, 3 });
+
+			return false;
+		});
+
+	BOOST_CHECK(!res);
+
+	auto remove_result_all = march::remove<products>(pool);
+
+	BOOST_CHECK(remove_result_all != 0);
+
+	io_pool.run();
+
+	io_pool.stop();
 }
+
+//BOOST_AUTO_TEST_CASE(async)
+//{
+//	boost::asio::io_service io_service;
+//
+//	march::async_pool pool(io_service, "172.26.4.15", march::default_port_string, "kcwl", "123456",
+//												   "test_mysql");
+//
+//
+//	march::async_insert(pool, products{ 1, "pro", 2, 3 },
+//						[&](auto result, auto ec)
+//						{
+//							BOOST_CHECK(!ec);
+//							BOOST_CHECK_EQUAL(result.affected_rows(), 1);
+//
+//							march::async_select_if<products>(pool, MAR_EXPR(prod_id) == 1,
+//								[&](auto result, auto ec)
+//								{
+//									BOOST_CHECK(!ec);
+//
+//									auto& top_one = result.top<1, products>().back();
+//
+//									BOOST_CHECK_EQUAL(top_one.prod_id, 1);
+//									BOOST_CHECK_EQUAL(top_one.prod_name, "pro");
+//									BOOST_CHECK_EQUAL(top_one.prod_price, 2);
+//									BOOST_CHECK_EQUAL(top_one.vend_id, 3);
+//
+//									march::async_remove_if<products>(pool, MAR_EXPR(prod_id) == 1,
+//										[&](auto result, auto ec)
+//										{
+//											BOOST_CHECK(!ec);
+//
+//											BOOST_CHECK_EQUAL(result.affected_rows(), 1);
+//										});
+//
+//								});
+//						});
+//
+//	//using trans_t = transaction<march::db_service>;
+//
+//	//pool.async_transactions(
+//	//	[&]()
+//	//	{
+//	//		auto result1 = march::insert(pool, products{ 2, "pro", 2, 3 });
+//
+//	//		if (!result1.affected_rows())
+//	//			return false;
+//
+//	//		auto result2 = march::insert(pool, products{ 3, "pro", 2, 3 });
+//
+//	//		if (!result2.affected_rows())
+//	//			return false;
+//
+//	//		auto result3 = march::insert(pool, products{ 4, "pro", 2, 3 });
+//
+//	//		if (!result3.affected_rows())
+//	//			return false;
+//
+//	//		return true;
+//	//	},
+//	//	[&](auto result, auto ec)
+//	//	{
+//	//		BOOST_CHECK(!ec);
+//
+//	//		BOOST_CHECK(result.affected_rows() == 3);
+//	//	});
+//
+//	io_service.run();
+//
+//	pool.stop();
+//}
 
 BOOST_AUTO_TEST_CASE(sql)
 {

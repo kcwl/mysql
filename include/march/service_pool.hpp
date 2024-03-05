@@ -11,7 +11,7 @@
 
 namespace march
 {
-	template <typename _Service, template<typename> typename _Transaction>
+	template <typename _Service, template <typename> typename _Transaction>
 	class service_pool
 	{
 	public:
@@ -46,23 +46,12 @@ namespace march
 		}
 
 	protected:
-		template <typename _Host, typename _Passwd, typename... _Args>
-		void make_param(boost::asio::io_service& io_service, _Host&& host, _Passwd&& psw, _Args&&... Args)
-		{
-			boost::asio::ip::tcp::resolver resolve(io_service);
-
-			endpoint_ = resolve.resolve(host, psw);
-
-			params_.reset(new boost::mysql::handshake_params(std::forward<_Args>(Args)...));
-		}
-
-	protected:
 		boost::asio::ip::tcp::resolver::results_type endpoint_;
 
 		std::shared_ptr<boost::mysql::handshake_params> params_;
 	};
 
-	template <typename _Service, template<typename> typename _Transaction>
+	template <typename _Service, template <typename> typename _Transaction>
 	class db_sync_pool : public service_pool<_Service, _Transaction>
 	{
 		using base_type = service_pool<_Service, _Transaction>;
@@ -106,8 +95,9 @@ namespace march
 			return conn_ptr->execute(sql, ec);
 		}
 
-		virtual bool transactions(base_type::transaction_t::isolation_level level, base_type::transaction_t::isolation_scope scope, bool consistant,
-						  std::function<bool()> f) override
+		virtual bool transactions(base_type::transaction_t::isolation_level level,
+								  base_type::transaction_t::isolation_scope scope, bool consistant,
+								  std::function<bool()> f) override
 		{
 			auto conn_ptr = get_service();
 
@@ -136,10 +126,20 @@ namespace march
 			return nullptr;
 		}
 
+		template <typename _Host, typename _Passwd, typename... _Args>
+		void make_param(_Host&& host, _Passwd&& psw, _Args&&... Args)
+		{
+			boost::asio::ip::tcp::resolver resolve(pool_.get_io_service());
+
+			this->endpoint_ = resolve.resolve(host, psw);
+
+			this->params_.reset(new boost::mysql::handshake_params(std::forward<_Args>(Args)...));
+		}
+
 		template <typename... _Args>
 		void make_service_pool(io_service_pool& pool, _Args&&... Args)
 		{
-			this->make_param(pool_.get_io_service(), std::forward<_Args>(Args)...);
+			make_param(std::forward<_Args>(Args)...);
 
 			for (std::size_t i = 0; i < connect_number; i++)
 			{
@@ -172,7 +172,7 @@ namespace march
 		std::mutex free_mutex_;
 	};
 
-	template <typename _Service, template<typename> typename _Transaction>
+	template <typename _Service, template <typename> typename _Transaction>
 	class db_async_pool : public service_pool<_Service, _Transaction>
 	{
 		using base_type = service_pool<_Service, _Transaction>;
@@ -184,8 +184,9 @@ namespace march
 		db_async_pool(boost::asio::io_service& io_service, _Args&&... Args)
 			: io_service_(io_service)
 			, service_ptr_(nullptr)
+			, resolve_(io_service_)
 		{
-			make_service(std::forward<_Args>(Args)...);
+			make_param(std::forward<_Args>(Args)...);
 		}
 
 	public:
@@ -206,34 +207,44 @@ namespace march
 			return service_ptr_->async_execute(sql, std::move(f));
 		}
 
-		void async_transaction(base_type::transaction_t::isolation_level level, base_type::transaction_t::isolation_scope scope,
-							   bool consistant, std::function<bool()> f, std::function<void(results, error_code)> token)
+		void async_transaction(base_type::transaction_t::isolation_level level,
+							   base_type::transaction_t::isolation_scope scope, bool consistant,
+							   std::function<bool()> f, std::function<void(results, error_code)> token)
 		{
 			return base_type::transaction_t(service_ptr_.get(), level, scope, consistant)
 				.async_execute(std::move(f), std::move(token));
 		}
 
 	private:
-		template<typename... _Args>
-		void make_service(_Args&&... Args)
+		template <typename _Host, typename _Port, typename... _Args>
+		void make_param(_Host&& host, _Port&& port, _Args&&... Args)
 		{
-			this->make_param(io_service_, std::forward<_Args>(Args)...);
+			this->params_.reset(new boost::mysql::handshake_params(std::forward<_Args>(Args)...));
 
-			service_ptr_ = std::move(std::make_unique<_Service>(io_service_, this->endpoint_, this->params_));
+			resolve_.async_resolve(host, port,
+								   [this](error_code ec, boost::asio::ip::tcp::resolver::results_type results)
+								   {
+									   if (ec)
+										   return;
 
-			service_ptr_->async_connect(
-				[](error_code ec)
-				{
-					if (ec)
-					{
-						std::cout << "maybe async connect occur error: " << ec.message() << std::endl;
-					}
-				});
+									   this->endpoint_ = std::move(results);
+
+									   make_service();
+								   });
+		}
+
+		void make_service()
+		{
+			service_ptr_ = std::make_unique<_Service>(io_service_, this->endpoint_, this->params_);
+
+			service_ptr_->async_connect();
 		}
 
 	private:
 		boost::asio::io_service& io_service_;
 
 		service_ptr_t service_ptr_;
+
+		boost::asio::ip::tcp::resolver resolve_;
 	};
 } // namespace march

@@ -4,6 +4,7 @@
 #include "io_service_pool.hpp"
 #include "results.hpp"
 #include <boost/mysql/tcp_ssl.hpp>
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,8 @@ namespace march
 			, resolver_(io_service_)
 			, endpoint_(host)
 			, params_(param)
+			, diag_()
+			, has_busy_(false)
 		{}
 
 		~db_service() = default;
@@ -39,20 +42,26 @@ namespace march
 		{
 			boost::mysql::error_code ec;
 
-			boost::mysql::diagnostics dg;
-
-			mysql_ptr_->connect(*endpoint_.begin(), *params_, ec, dg);
+			mysql_ptr_->connect(*endpoint_.begin(), *params_, ec, diag_);
 
 			return !ec;
 		}
 
-		template <typename _Func>
-		void async_connect(_Func&& f)
+		void async_connect()
 		{
-			auto future = mysql_ptr_->async_connect(*endpoint_.begin(), *params_, boost::asio::use_future);
-			future.get();
-
-			return ;
+			return mysql_ptr_->async_connect(*endpoint_.begin(), *params_, diag_,
+											 [this](error_code ec)
+											 {
+												 if (ec)
+												 {
+													 std::cout << "maybe async connect occur error: " << ec.message()
+															   << std::endl;
+												 }
+												 else
+												 {
+													 this->ping();
+												 }
+											 });
 		}
 
 		void close()
@@ -85,10 +94,12 @@ namespace march
 		}
 
 		template <typename _Func>
-		auto async_execute(std::string_view sql, _Func&& f)
+		void async_execute(std::string_view sql, _Func&& f)
 		{
 			boost::mysql::results result{};
 
+			if (!mysql_ptr_)
+				return;
 			return mysql_ptr_->async_execute(sql, result, [&](error_code ec) { f(results(result), ec); });
 		}
 
@@ -103,6 +114,18 @@ namespace march
 		}
 
 	private:
+		void ping()
+		{
+			mysql_ptr_->async_ping([this](error_code ec)
+				{
+					if (ec)
+						return;
+
+					this->ping();
+				});
+		}
+
+	private:
 		boost::asio::io_service& io_service_;
 
 		boost::asio::ssl::context ssl_ctx_;
@@ -114,6 +137,8 @@ namespace march
 		boost::asio::ip::tcp::resolver::results_type endpoint_;
 
 		std::shared_ptr<boost::mysql::handshake_params> params_;
+
+		boost::mysql::diagnostics diag_;
 
 		bool has_busy_;
 	};
