@@ -163,7 +163,7 @@ namespace march
 					 transaction_t::isolation_scope scope = transaction_t::isolation_scope::current,
 					 bool consistant = true)
 	{
-		pool.transactions(level, scope, consistant, std::forward<_Func>(f));
+		return pool.transactions(level, scope, consistant, std::forward<_Func>(f));
 	}
 
 	template <typename _Func>

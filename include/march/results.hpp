@@ -38,6 +38,17 @@ namespace march
 			return make_result<_Ty>();
 		}
 
+		template<typename _Ty>
+		_Ty to_single()
+		{
+			if (!result_.has_value())
+				return {};
+
+			auto column = result_.rows().at(0);
+
+			return detail::to_struct<_Ty>(column);
+		}
+
 		template <typename _Ty>
 		_Ty top_one()
 		{
@@ -65,6 +76,11 @@ namespace march
 				return 0;
 
 			return result_.affected_rows();
+		}
+
+		bool has_value()
+		{
+			return result_.has_value();
 		}
 
 	private:
